@@ -87,9 +87,9 @@ This structure makes the firmware easy to extend, debug, and maintain.
 
 | Function               | Pin     | Notes                          |
 |------------------------|---------|--------------------------------|
-| MSP RX                 | GPIO4/5 | UART from Air Unit             |
+| MSP RX                 | GPIO0/1 | UART from Air Unit             |
 | PWM Arming Input       | GPIO6   | Optional                       |
-| Servo Expander Input   | GPIO7   | From RC receiver               |
+| Servo Expander Input   | GPIO7   | From RC receiver (pan servo)   |
 | Servo Expander Output  | GPIO29  | Scaled PWM output              |
 | Status LED             | GPIOx   | Configurable                   |
 
