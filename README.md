@@ -76,7 +76,7 @@ This structure makes the firmware easy to extend, debug, and maintain.
 ## 🧩 Hardware Requirements
 
 - RP2040‑Zero or compatible RP2040 board  
-- DJI O4 / Vista / Air Unit UART connection  
+- DJI O3, O4 / Vista / Air Unit / Walksnail UART connection  
 - Optional:
   - RC PWM receiver (ELRS PWM RX recommended)
   - Servo / gimbal / accessory for PWM expansion output
