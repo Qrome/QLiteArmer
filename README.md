@@ -118,12 +118,12 @@ All user‑adjustable settings live in `config.h`:
    - LED turns red  
    - PRE_ARM_DELAY begins  
 
-3. **Arming Logic**  
+3. **Arming Logic**
+   - LED turns green when armed  
    - Timer‑based arming  
    - OR PWM‑based arming  
-   - LED turns green when armed  
 
-4. **Servo Expansion**  
+5. **Servo Expansion**  
    - Continuously reads PWM input  
    - Measures pulse width + frequency  
    - Outputs scaled PWM on pin 29  
