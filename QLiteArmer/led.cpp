@@ -21,6 +21,7 @@ void ledBlue()  { set(0,0,255); }
 void ledRed()   { set(255,0,0); }
 void ledGreen() { set(0,255,0); }
 void ledOff()   { set(0,0,0); }
+void ledYellow(){ set(50,50,0); }
 
 void ledAmberFlash() {
     uint32_t now = millis();

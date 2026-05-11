@@ -1,24 +1,68 @@
 #pragma once
 #include <Arduino.h>
 
-// PWM-based arming (optional)
-static const uint8_t  PWM_ARM_PIN        = 6;     // GPIO pin for PWM input
-static const uint16_t PWM_ARM_THRESHOLD  = 1800;  // µs required to arm
-static const uint16_t PWM_NO_SIGNAL_US   = 900;   // below this = no PWM present
 
-// Servo Expander
-static const uint8_t  SERVO_IN_PIN        = 7;     // PWM input from RX
-static const uint8_t  SERVO_OUT_PIN       = 29;    // PWM output
-static const uint16_t SERVO_IN_MIN_US     = 1000;  // expected RX range
-static const uint16_t SERVO_IN_MAX_US     = 2000;
-static const uint16_t SERVO_OUT_MIN_US    = 500;   // expanded output range LOW
-static const uint16_t SERVO_OUT_MAX_US    = 2500;  // expanded high
+// ======================================================
+// Per‑Channel PWM Mapping (microseconds)
+// ======================================================
+struct ChannelMap {
+    uint16_t minUs;       // mapped minimum
+    uint16_t maxUs;       // mapped maximum
+    uint16_t failsafeUs;  // output when CRSF link is lost
+};
+
+
+static const ChannelMap CH_MAP[8] = {
+    {988, 2012, 1500},   // CH1
+    {988, 2012, 1500},   // CH2
+    {988, 2012, 1000},   // CH3 (Throttle failsafe = 1000)
+    {500, 2500, 1500},   // CH4 (Expanded)
+    {988, 2012, 1500},   // CH5
+    {500, 2500, 1500},   // CH6 (expanded range)
+    {988, 2012, 1500},   // CH7
+    {988, 2012, 1500}    // CH8
+};
+
+// ======================================================
+// Pin Configuration
+// ======================================================
+#define PIN_CRSF_RX     9
+#define PIN_CRSF_TX     8
+
+#define PIN_I2C_SDA     4
+#define PIN_I2C_SCL     5
+
+#define PIN_VBAT_ADC    26   // ADC0
+
+// ======================================================
+// PWM Output Pins (8 channels)
+// ======================================================
+static const uint8_t PWM_PINS[8] = {
+    13, 12, 11, 10, 7, 6, 3, 2
+};
+
+// ======================================================
+// Battery Divider (30k / 7.5k)
+// ======================================================
+#define VBAT_R1 30000.0f
+#define VBAT_R2  7500.0f
+
+// ======================================================
+// Telemetry Rates
+// ======================================================
+#define TELEMETRY_BATT_HZ   5
+#define TELEMETRY_ALT_HZ    5
+
+// PWM-based arming (optional)
+static const uint8_t PWM_ARM_CHANNEL     = 4;     // 0 based array 0 - 7
+static const uint16_t PWM_ARM_THRESHOLD  = 1700;  // µs required to arm
+static const uint16_t PWM_NO_SIGNAL_US   = 900;   // below this = no PWM present
 
 // UART
 static const uint32_t MSP_BAUD = 115200;
 
 // Timings (ms)
-static const uint32_t VTX_DETECTION_TIMEOUT_MS = 60000;  // 60 seconds
+static const uint32_t VTX_DETECTION_TIMEOUT_MS = 300000;  // 5 minutes
 static const uint32_t PRE_ARM_DELAY_MS         = 30000;  // 30 seconds only used if no PWM arming
 static const uint32_t HEARTBEAT_INTERVAL_MS    = 200;    // BTFL use 150 (~6.7 Hz)
 

@@ -4,24 +4,13 @@
 #include "detection.h"
 #include "bf_msp.h"
 
+
 SystemState currentState = STATE_BOOT_DETECT;
 
 static uint32_t stateStart = 0;
 static uint32_t lastHeartbeat = 0;
 
 // ---------------------------------------------------------
-// PWM helper: returns pulse width in µs, or -1 if no signal
-// ---------------------------------------------------------
-static int readPwmArmValue() {
-    uint32_t pw = pulseIn(PWM_ARM_PIN, HIGH, 25000);   // 25ms timeout
-    if (pw < PWM_NO_SIGNAL_US) {
-        return -1;   // no PWM present
-    }
-    return (int)pw;  // valid PWM pulse
-}
-
-// ---------------------------------------------------------
-
 void enterState(SystemState s) {
     currentState = s;
     stateStart = millis();
@@ -36,7 +25,7 @@ void enterState(SystemState s) {
 
 // ---------------------------------------------------------
 
-void stateMachineUpdate() {
+void stateMachineUpdate(uint16_t armValue) {
     uint32_t now = millis();
 
     switch (currentState) {
@@ -45,6 +34,7 @@ void stateMachineUpdate() {
         case STATE_BOOT_DETECT:
             detectionPoll();
             if (vtxDetected) {
+                bf_msp_firstbeat();
                 enterState(STATE_PRE_ARM_DELAY);
             } else if (now - stateStart > VTX_DETECTION_TIMEOUT_MS) {
                 enterState(STATE_ERROR);
@@ -60,12 +50,9 @@ void stateMachineUpdate() {
                 bf_msp_heartbeat(false);
             }
 
-            // Read PWM
-            int pwm = readPwmArmValue();
-
-            if (pwm >= 0) {
+            if (armValue >= 0) {
                 // PWM present → PWM controls arming
-                if (pwm >= PWM_ARM_THRESHOLD) {
+                if (armValue >= PWM_ARM_THRESHOLD) {
                     enterState(STATE_ARMED);
                 }
                 // else stay in PRE_ARM_DELAY
@@ -87,11 +74,8 @@ void stateMachineUpdate() {
                 bf_msp_heartbeat(true);
             }
 
-            // Read PWM
-            int pwm = readPwmArmValue();
-
             // If PWM present AND below threshold → disarm
-            if (pwm >= 0 && pwm < PWM_ARM_THRESHOLD) {
+            if (armValue >= 0 && armValue < PWM_ARM_THRESHOLD) {
                 enterState(STATE_PRE_ARM_DELAY);
             }
         }

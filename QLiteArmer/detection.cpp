@@ -81,6 +81,10 @@ void processByte(uint8_t b) {
 }
 
 void detectionPoll() {
-    while (Serial1.available())
+    Serial.println("Checking Serial1");
+    while (Serial1.available()) {
         processByte(Serial1.read());
+        Serial.print(".");
+    }
+    Serial.println("READ!");
 }

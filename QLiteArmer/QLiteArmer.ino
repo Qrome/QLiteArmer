@@ -84,32 +84,60 @@
 */
 
 #include <Arduino.h>
+#include "Telemetry.h"
 #include "config.h"
 #include "led.h"
 #include "state_machine.h"
 #include "detection.h"
 #include "bf_msp.h"
-#include "servo_expander.h"
+#include "CrossfireELRS.h"
+#include "PWMDriver.h"
+#include "Telemetry.h"
+#include "hardware/adc.h"
 
+
+CrossfireELRS crsf;
+PWMDriver pwm;
+Telemetry telemetry;
+
+inline void debugPrint(const String &msg) {
+  if (Serial) {
+      Serial.println(msg);
+  }
+}
 
 void setup() {
-    Serial.begin(115200);
+    Serial.begin(420000);
+    unsigned long start = millis();
+    while (!Serial && (millis() - start < 1500)) {
+        delay(10);
+    }
+
+    debugPrint("Starting up QLiteArmer...");
+
+    crsf.begin(PIN_CRSF_RX, PIN_CRSF_TX);
+    pwm.begin(PWM_PINS, 8);
+    telemetry.begin();
+
+    delay(500);  // let CRSF start first
 
     Serial1.setTX(0);
     Serial1.setRX(1);
     Serial1.begin(MSP_BAUD);
-    bf_msp_init(Serial1);
-    
-    analogReadResolution(12);  // Set RP2040 ADC to 12-bit mode
+    bf_msp_init(Serial1, telemetry);
 
     ledInit();
     detectionInit();
-    servoExpanderInit();
 
     enterState(STATE_BOOT_DETECT);
 }
 
 void loop() {
-  servoExpanderUpdate();
-  stateMachineUpdate();
+  crsf.update();  // updates link state + channels when available
+  for (int i = 0; i < 8; i++) {
+      pwm.writeFromCRSF(i, crsf.getChannel(i), crsf.crsfLinkActive);
+  }
+  
+  telemetry.update();
+  stateMachineUpdate(crsf.getChannel(PWM_ARM_CHANNEL));
 }

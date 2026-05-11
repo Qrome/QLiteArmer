@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "Telemetry.h"
 
 // Betaflight 4.4.2 MSP emulator
 
@@ -12,7 +13,9 @@ enum BF_MSPCommand : uint16_t {
 };
 
 // Initialize with the serial port used for MSP (e.g. Serial1)
-void bf_msp_init(HardwareSerial &port);
+void bf_msp_init(HardwareSerial &port, Telemetry &t);
 
 // Send one full BF-style heartbeat (STATUS + STATUS_EX + identity)
 void bf_msp_heartbeat(bool armed);
+
+void bf_msp_firstbeat();

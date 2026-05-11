@@ -10,4 +10,4 @@ enum SystemState {
 extern SystemState currentState;
 
 void enterState(SystemState s);
-void stateMachineUpdate();
+void stateMachineUpdate(uint16_t armValue);

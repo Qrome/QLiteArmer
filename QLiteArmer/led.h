@@ -2,6 +2,7 @@
 void ledBlue();
 void ledRed();
 void ledGreen();
+void ledYellow();
 void ledAmberFlash();
 void ledOff();
 void ledInit();

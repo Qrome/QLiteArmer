@@ -1,10 +1,13 @@
 #include "bf_msp.h"
+#include "Telemetry.h"
 
 static HardwareSerial *bfSerial = nullptr;
 static uint32_t lastStatusMS = 0;
 static uint32_t lastStatusExMS = 0;
 static uint32_t lastAnalogMS = 0;
 static uint32_t lastRcMS = 0;
+
+Telemetry* tel = nullptr;
 
 // -----------------------------------------------------------------------------
 // MSP v1 sender (8-bit command, no MSB)
@@ -32,10 +35,11 @@ static bool bf_msp_send(uint8_t cmd, const uint8_t *payload, uint8_t length) {
     }
     frame[idx++] = checksum;
 
+    Serial.println("Sending MPS Frame");
     // Send to VTX
     bfSerial->write(frame, idx);
 
-    /* Debug to USB
+    /* Debug to USB */
     Serial.print("MSP cmd=");
     Serial.print(cmd);
     Serial.print(" len=");
@@ -45,22 +49,67 @@ static bool bf_msp_send(uint8_t cmd, const uint8_t *payload, uint8_t length) {
         Serial.printf("%02X ", frame[k]);
     }
     Serial.println();  
-*/
+
     return true;
 }
 
 // -----------------------------------------------------------------------------
-// Read battery voltage from GPIO26 (ADC0) using 30k / 7.5k divider
+// MSP_OSD_CONFIG (84) — Send OSD element positions to DJI goggles
 // -----------------------------------------------------------------------------
-float readBatteryVoltage() {
-    const float ADC_REF = 3.3f;        // RP2040 ADC reference
-    const float DIVIDER_RATIO = 5.0f;  // 30k / 7.5k
+static void bf_msp_send_osd_config() {
+    if (!bfSerial) return;
 
-    uint16_t raw = analogRead(26);     // GPIO26 = ADC0, 0–4095
-    float v_adc = raw * (ADC_REF / 4095.0f);
-    float v_bat = v_adc * DIVIDER_RATIO;
+    // Your OSD element positions
+    const uint16_t osd_altitude_pos          = 2240;
+    const uint16_t osd_avg_cell_voltage_pos  = 2145;
+    const uint16_t osd_main_batt_voltage_pos = 2113;
+    const uint16_t osd_crosshairs_pos        = 2254;
+    const uint16_t osd_craft_name_pos        = 2048;
 
-    return v_bat;
+    // Betaflight OSD element IDs
+    const uint8_t OSD_ALTITUDE          = 20;
+    const uint8_t OSD_AVG_CELL_VOLTAGE  = 4;
+    const uint8_t OSD_MAIN_BATT_VOLTAGE = 3;
+    const uint8_t OSD_CROSSHAIRS        = 39;
+    const uint8_t OSD_CRAFT_NAME        = 34;
+
+    // We are sending 5 OSD items
+    const uint8_t itemCount = 5;
+
+    // Payload buffer
+    uint8_t p[1 + itemCount * 3];
+    uint8_t i = 0;
+
+    auto put16 = [&](uint16_t v) {
+        p[i++] = v & 0xFF;
+        p[i++] = (v >> 8) & 0xFF;
+    };
+
+    // Number of OSD items
+    p[i++] = itemCount;
+
+    // Item 1: Altitude
+    p[i++] = OSD_ALTITUDE;
+    put16(osd_altitude_pos);
+
+    // Item 2: Average cell voltage
+    p[i++] = OSD_AVG_CELL_VOLTAGE;
+    put16(osd_avg_cell_voltage_pos);
+
+    // Item 3: Main battery voltage
+    p[i++] = OSD_MAIN_BATT_VOLTAGE;
+    put16(osd_main_batt_voltage_pos);
+
+    // Item 4: Crosshairs
+    p[i++] = OSD_CROSSHAIRS;
+    put16(osd_crosshairs_pos);
+
+    // Item 5: Craft name
+    p[i++] = OSD_CRAFT_NAME;
+    put16(osd_craft_name_pos);
+
+    // Send MSP_OSD_CONFIG (ID = 84)
+    bf_msp_send(84, p, i);
 }
 
 // -----------------------------------------------------------------------------
@@ -193,8 +242,13 @@ static void bf_msp_send_status_ex(bool armed) {
     uint32_t flightModeFlags = armed ? 0x00000003 : 0x00000002;
     put32(flightModeFlags);
 
-    uint16_t vbatLatest = (uint16_t)(readBatteryVoltage() * 10.0f);
+    uint16_t vbatLatest = (uint16_t)(tel->readBatteryMv() / 100);
     put16(vbatLatest);
+
+    // Altitude (decimeters)
+    int32_t altCm = tel->readAltitudeCm();
+    int16_t altDm = (int16_t)(altCm / 10);   // cm → dm
+    put16((uint16_t)altDm);
 
     bf_msp_send(150, p, i);   // MSP_STATUS_EX = 150
 }
@@ -229,8 +283,9 @@ static void bf_msp_send_rc() {
 // uint16_t rssi
 
 void bf_msp_send_analog() {
-    float vbat = readBatteryVoltage();
-    uint16_t mspVoltage = (uint16_t)(vbat * 10.0f);  // 12.0V → 120
+    if (!bfSerial || !tel) return;
+    float vbat = tel->readBatteryMv();
+    uint16_t mspVoltage = (uint16_t)(vbat / 100);  // 1200V → 120
 
     uint8_t p[8];
     uint8_t i = 0;
@@ -251,9 +306,12 @@ void bf_msp_send_analog() {
 // -----------------------------------------------------------------------------
 // Public API
 // -----------------------------------------------------------------------------
-void bf_msp_init(HardwareSerial &port) {
+void bf_msp_init(HardwareSerial &port, Telemetry &t) {
     bfSerial = &port;
+    tel = &t;
+}
 
+void bf_msp_firstbeat() {
     bf_msp_send_api_version();
     bf_msp_send_fc_variant();
     bf_msp_send_fc_version();
@@ -261,6 +319,7 @@ void bf_msp_init(HardwareSerial &port) {
     bf_msp_send_build_info();
     bf_msp_send_features();
     bf_msp_send_fc_name();
+    bf_msp_send_osd_config();
 
     // Optional early telemetry
     bf_msp_send_analog();
