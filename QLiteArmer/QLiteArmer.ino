@@ -137,7 +137,9 @@ void loop() {
   for (int i = 0; i < 8; i++) {
       pwm.writeFromCRSF(i, crsf.getChannel(i), crsf.crsfLinkActive);
   }
-  
+}
+
+void loop1() {
   telemetry.update();
   stateMachineUpdate(crsf.getChannel(PWM_ARM_CHANNEL));
 }
