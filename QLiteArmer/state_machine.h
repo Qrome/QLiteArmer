@@ -10,4 +10,7 @@ enum SystemState {
 extern SystemState currentState;
 
 void enterState(SystemState s);
-void stateMachineUpdate(uint16_t armValue);
+
+// armValue    — raw CRSF channel value (172–1811 range)
+// linkActive  — true if CRSF link is alive
+void stateMachineUpdate(uint16_t armValue, bool linkActive);

@@ -53,6 +53,13 @@ static const uint8_t PWM_PINS[8] = {
 #define TELEMETRY_BATT_HZ   5
 #define TELEMETRY_ALT_HZ    5
 
+// Units for altitude + vertical speed
+#define OSD_UNITS_METRIC     0
+#define OSD_UNITS_IMPERIAL   1
+
+// Set your preferred default here:
+#define OSD_UNITS OSD_UNITS_IMPERIAL
+
 // PWM-based arming (optional)
 static const uint8_t PWM_ARM_CHANNEL     = 4;     // 0 based array 0 - 7
 static const uint16_t PWM_ARM_THRESHOLD  = 1700;  // µs required to arm

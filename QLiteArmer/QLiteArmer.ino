@@ -2,85 +2,6 @@
   HD_Amer — Auto‑Arming MSP Transmitter Firmware
   by David Payne (Qromer)
   Target MCU: Waveshare RP2040‑Zero
-  PRD Version: v2.3
-
-  ---------------------------------------------------------------------------
-  OVERVIEW
-  ---------------------------------------------------------------------------
-  This firmware automatically arms compatible digital video transmitters (DJI
-  O3/O4, Vista/AU, Walksnail) by sending Betaflight‑style MSP packets with the
-  `armed` flag set to 1. The module performs system‑specific VTX detection,
-  waits a configurable pre‑arm delay, then begins transmitting an MSP heartbeat
-  at 5–10 Hz. No RC PWM input is used.
-
-  ---------------------------------------------------------------------------
-  LED STATE MACHINE (ONBOARD WS2812 RGB)
-  ---------------------------------------------------------------------------
-    BLUE  (solid)  — BOOT_DETECT
-                     Waiting for VTX UART activity.
-                     Hybrid MSP detection:
-                       * Detect "$M<" header + plausible length.
-                       * Attempt full checksum validation.
-                       * If checksum fails but framing is valid, still count.
-                     If no valid activity within timeout → ERROR.
-
-    RED   (solid)  — PRE_ARM_DELAY
-                     VTX detected. Waiting configurable delay before arming.
-                     No armed frames sent during this period.
-
-    GREEN (solid)  — ARMED
-                     First MSP_STATUS(armed=1) frame has been SENT.
-                     MSP heartbeat continues at 5–10 Hz.
-
-    AMBER (rapid)  — ERROR
-                     Any of the following:
-                       * No VTX activity within detection timeout.
-                       * UART TX failures exceed threshold.
-                       * Repeated malformed MSP frames.
-                       * Unexpected UART behavior.
-
-  ---------------------------------------------------------------------------
-  MSP BEHAVIOR (TRUE BETAFLIGHT STYLE)
-  ---------------------------------------------------------------------------
-    MSP_API_VERSION   — Example: 1.45.0
-    MSP_FC_VARIANT    — "BFLT"
-    MSP_FC_NAME       — "HD_ARMER"
-    MSP_STATUS        — Betaflight layout:
-                          cycleTime, i2cErrorCount, sensor, flags,
-                          currentSet, pidProfile, rateProfile
-                        Armed flag = bit 0 of `flags`.
-
-    Optional:
-      MSP_BATTERY_STATE — Dummy payload (disabled by default)
-
-  ---------------------------------------------------------------------------
-  CONFIGURABLE PARAMETERS (config.h)
-  ---------------------------------------------------------------------------
-    MSP_BAUD                    — default 115200
-    VTX_DETECTION_TIMEOUT_MS    — default 30000 ms
-    PRE_ARM_DELAY_MS            — default 5000 ms
-    HEARTBEAT_INTERVAL_MS       — default 150 ms
-    TX_FAIL_THRESHOLD           — default 5
-    BAD_CHECKSUM_THRESHOLD      — default 3
-    LED_PIN / LED_COUNT         — RP2040‑Zero onboard WS2812
-
-  ---------------------------------------------------------------------------
-  FILE ARCHITECTURE
-  ---------------------------------------------------------------------------
-    HD_Amer.ino        — Entry point, setup(), loop()
-    state_machine.*    — State transitions + timing logic
-    detection.*        — Hybrid MSP detection (Option C)
-    msp.*              — Betaflight‑style MSP serialization
-    led.*              — RGB LED control + error flashing
-    config.h           — All compile‑time configuration
-
-  ---------------------------------------------------------------------------
-  NOTES
-  ---------------------------------------------------------------------------
-    • Designed for reliability on the bench and in the field.
-    • No RC receiver or PWM input is used.
-    • UART TX → VTX RX, UART RX ← VTX TX, GND ↔ GND.
-    • Behavior matches PRD v2.3 exactly.
 */
 
 #include <Arduino.h>
@@ -92,20 +13,23 @@
 #include "bf_msp.h"
 #include "CrossfireELRS.h"
 #include "PWMDriver.h"
-#include "Telemetry.h"
-#include "hardware/adc.h"
-
 
 CrossfireELRS crsf;
 PWMDriver pwm;
 Telemetry telemetry;
 
+// Shared across cores — volatile for safety
+volatile bool systemReady = false;
+
 inline void debugPrint(const String &msg) {
-  if (Serial) {
-      Serial.println(msg);
-  }
+    if (Serial) {
+        Serial.println(msg);
+    }
 }
 
+// -------------------------------------------------------
+// Core 0 — RC input + PWM output (time-critical)
+// -------------------------------------------------------
 void setup() {
     Serial.begin(420000);
     unsigned long start = millis();
@@ -115,31 +39,84 @@ void setup() {
 
     debugPrint("Starting up QLiteArmer...");
 
+    // CRSF receiver
     crsf.begin(PIN_CRSF_RX, PIN_CRSF_TX);
+
+    // PWM servo outputs
     pwm.begin(PWM_PINS, 8);
-    telemetry.begin();
 
-    delay(500);  // let CRSF start first
+    delay(500);  // let CRSF stabilise first
 
-    Serial1.setTX(0);
-    Serial1.setRX(1);
-    Serial1.begin(MSP_BAUD);
-    bf_msp_init(Serial1, telemetry);
-
-    ledInit();
-    detectionInit();
-
-    enterState(STATE_BOOT_DETECT);
+    systemReady = true;
 }
 
 void loop() {
-  crsf.update();  // updates link state + channels when available
-  for (int i = 0; i < 8; i++) {
-      pwm.writeFromCRSF(i, crsf.getChannel(i), crsf.crsfLinkActive);
-  }
+    // CRSF receiver — time sensitive, must run every loop
+    crsf.update();
+
+    // PWM outputs from CRSF channels
+    for (int i = 0; i < 8; i++) {
+        pwm.writeFromCRSF(i, crsf.getChannel(i), crsf.crsfLinkActive);
+    }
+
+    bf_msp_parse_incoming();       // always — reads and responds to polls
+    bf_msp_firstbeat_update();     // always — no-op after firstbeat completes
+    bf_msp_heartbeat_update((currentState == STATE_ARMED)); // always — skips DP heartbeat for V1
+    bf_msp_dp_update_osd_nb();     // always — no-op for V1, active for O3/Avatar
+
+    // Add to loop() temporarily for diagnosis
+    static uint32_t lastDebugMs = 0;
+    if (millis() - lastDebugMs > 2000) {
+        lastDebugMs = millis();
+        VtxSystemType t = bf_msp_get_vtx_type();
+        Serial.print("[DEBUG] VTX type detected: ");
+        switch(t) {
+            case VTX_UNKNOWN:   Serial.println("UNKNOWN"); break;
+            case VTX_DJI_V1:    Serial.println("DJI V1");  break;
+            case VTX_DJI_O3:    Serial.println("DJI O3/O4"); break;
+            case VTX_WALKSNAIL: Serial.println("Walksnail Avatar"); break;
+        }
+    }
+}
+
+// -------------------------------------------------------
+// Core 1 — MSP arming + telemetry (background)
+// -------------------------------------------------------
+void setup1() {
+    // Wait for Core 0 to finish its setup
+    while (!systemReady) {
+        delay(10);
+    }
+
+    // MSP UART to VTX
+    Serial1.setTX(0);
+    Serial1.setRX(1);
+    Serial1.begin(MSP_BAUD);
+
+    // Telemetry (BMP280 + ADC)
+    telemetry.begin();
+
+    // MSP subsystem
+    bf_msp_init(Serial1, telemetry);
+
+    // LED
+    ledInit();
+
+    // VTX detection parser
+    detectionInit();
+
+    // Start state machine
+    enterState(STATE_BOOT_DETECT);
+
+    debugPrint("Core 1 ready.");
 }
 
 void loop1() {
-  telemetry.update();
-  stateMachineUpdate(crsf.getChannel(PWM_ARM_CHANNEL));
+    telemetry.update();
+
+    // Read arm channel — detect no-signal via PWM_NO_SIGNAL_US threshold
+    uint16_t armRaw = crsf.getChannel(PWM_ARM_CHANNEL);
+    stateMachineUpdate(armRaw, crsf.crsfLinkActive);
 }
+
+
