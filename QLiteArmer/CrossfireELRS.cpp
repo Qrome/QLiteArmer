@@ -1,8 +1,10 @@
 #include "CrossfireELRS.h"
 
-#define CRSF_SYNC_BYTE 0xC8
-#define CRSF_TYPE_RC_CHANNELS 0x16
-#define CRSF_RC_PAYLOAD_LEN 22
+#define CRSF_SYNC_BYTE         0xC8
+#define CRSF_TYPE_RC_CHANNELS  0x16
+#define CRSF_TYPE_LINK_STATS   0x14   // <-- Link Statistics frame for LQ/RSSI
+#define CRSF_RC_PAYLOAD_LEN    22
+
 
 void CrossfireELRS::begin(int rxPin, int txPin) {
     Serial2.setRX(rxPin);
@@ -56,23 +58,42 @@ bool CrossfireELRS::update() {
         buffer[index++] = b;
 
         if (index == payloadLen + 2) {
-            uint8_t crc = crc8(&buffer[2], payloadLen - 1);
-            uint8_t crcFrame = buffer[index - 1];
+            uint8_t crc       = crc8(&buffer[2], payloadLen - 1);
+            uint8_t crcFrame  = buffer[index - 1];
 
-            if (crc == crcFrame && buffer[2] == CRSF_TYPE_RC_CHANNELS) {
-                decodeChannels(&buffer[3]);
-                // mark link active
-                lastPacketTime = millis();
-                crsfLinkActive = true;
+            if (crc == crcFrame) {
+                uint8_t type    = buffer[2];
+                uint8_t *payload = &buffer[3];
 
-                index = 0;
-                return true;
+                // -----------------------------------------------
+                // RC Channels frame - decode stick/switch channels
+                // -----------------------------------------------
+                if (type == CRSF_TYPE_RC_CHANNELS) {
+                    decodeChannels(payload);
+                    lastPacketTime = millis();
+                    crsfLinkActive = true;
+                    index = 0;
+                    return true;
+                }
+
+                // -----------------------------------------------
+                // Link Statistics frame - read LQ and RSSI
+                // payload[2] = Uplink LQ (0-100%)
+                // payload[0] = Uplink RSSI Antenna 1 (dBm, negated)
+                // -----------------------------------------------
+                if (type == CRSF_TYPE_LINK_STATS) {
+                    linkQuality  = payload[2];   // LQ: 0-100%
+                    //rssi         = -(int8_t)payload[0]; // RSSI in dBm (positive stored, negate for true dBm)
+                    index = 0;
+                    return false; // don't return true as no new RC data yet
+                }
             }
 
             index = 0;
         }
     }
-    // link timeout (100ms is standard for ELRS)
+
+    // Link timeout check (100ms is standard for ELRS)
     if (millis() - lastPacketTime > 100) {
         crsfLinkActive = false;
     }

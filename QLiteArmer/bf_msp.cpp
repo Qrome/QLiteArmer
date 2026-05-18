@@ -23,6 +23,7 @@ Fits within both O3/O4 (53x20) and Avatar (50x18).
 // -------------------------------------------------------
 static HardwareSerial* _serial = nullptr;
 static Telemetry* _telemetry = nullptr;
+static CrossfireELRS* _elrs = nullptr;
 
 // -------------------------------------------------------
 // MSP Command IDs
@@ -37,6 +38,12 @@ static Telemetry* _telemetry = nullptr;
 #define MSP_ALTITUDE 109
 #define MSP_OSD_CONFIG 84
 #define MSP_DISPLAYPORT 182
+#define MSP_RAW_IMU         102   // 0x5C — accelerometer/gyro raw data
+#define MSP_SERVO           94    // 0x5E — servo positions
+#define MSP_RC              105   // 0x69 — RC channel values
+#define MSP_RC_TUNING       111   // 0x6F — rate/expo settings
+#define MSP_PID             112   // 0x70 — PID values
+#define MSP_BATTERY_STATE   130   // 0x82 — battery voltage/state (DJI native voltage source)
 
 // -------------------------------------------------------
 // MSP DisplayPort Sub-commands
@@ -132,6 +139,10 @@ static uint32_t _osdStepMs = 0;
 static bool _seenApiVersion = false;
 static bool _seenFcName = false;
 static bool _seenStatusEx = false;
+static bool _seenDisplayPort = false;
+static bool _seenOsdConfig = false;
+static bool _seenStatus = false;
+
 
 // Tracks whether DisplayPort canvas ownership has been claimed
 static bool _dpReleased = false;
@@ -168,56 +179,219 @@ static void bf_msp_dp_clear();
 static void bf_msp_dp_draw();
 static void bf_msp_dp_write(uint8_t row, uint8_t col, const char* text,
                             uint8_t attr);
+static void bf_msp_send_raw_imu();
+static void bf_msp_send_servo();
+static void bf_msp_send_rc();
+static void bf_msp_send_rc_tuning();
+static void bf_msp_send_pid();
+static void bf_msp_send_battery_state();
+
+// -------------------------------------------------------
+// DEBUG ONLY — hex dump an MSP payload before sending
+// Remove once native OSD voltage is confirmed working
+// -------------------------------------------------------
+static void debug_dump_payload(const char* label,
+                                uint8_t cmd,
+                                const uint8_t* p,
+                                uint8_t len) {
+    if (!Serial) return;
+    Serial.print("[MSP DUMP] ");
+    Serial.print(label);
+    Serial.print(" cmd=");
+    Serial.print(cmd, DEC);
+    Serial.print(" len=");
+    Serial.print(len, DEC);
+    Serial.print(" bytes=");
+    for (uint8_t i = 0; i < len; i++) {
+        if (p[i] < 0x10) Serial.print("0");
+        Serial.print(p[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+}
+
+// -------------------------------------------------------
+// MSP_RAW_IMU (102) — 18 bytes little-endian
+// Accelerometer (3x int16) + Gyro (3x int16) + Mag (3x int16)
+// DJI polls this — return zeroed data, we have no IMU
+// -------------------------------------------------------
+static void bf_msp_send_raw_imu() {
+    uint8_t p[18];
+    memset(p, 0, sizeof(p));
+    bf_msp_send(MSP_RAW_IMU, p, sizeof(p));
+}
+
+// -------------------------------------------------------
+// MSP_SERVO (94) — 16 bytes little-endian
+// 8x uint16 servo positions (1000-2000us each)
+// DJI polls this — return midpoint values
+// -------------------------------------------------------
+static void bf_msp_send_servo() {
+    uint8_t p[16];
+    uint8_t idx = 0;
+    for (uint8_t i = 0; i < 8; i++) {
+        PACK_U16_LE(p, idx, (uint16_t)1500);   // midpoint
+    }
+    bf_msp_send(MSP_SERVO, p, idx);
+}
+
+// -------------------------------------------------------
+// MSP_RC (105) — 32 bytes little-endian
+// 16x uint16 RC channel values (1000-2000us each)
+// DJI polls this — return midpoint values
+// -------------------------------------------------------
+static void bf_msp_send_rc() {
+    uint8_t p[32];
+    uint8_t idx = 0;
+    for (uint8_t i = 0; i < 16; i++) {
+        PACK_U16_LE(p, idx, (uint16_t)1500);   // midpoint
+    }
+    bf_msp_send(MSP_RC, p, idx);
+}
+
+// -------------------------------------------------------
+// MSP_RC_TUNING (111) — 14 bytes
+// RC rate, expo, and throttle settings
+// DJI polls this — return safe defaults
+// -------------------------------------------------------
+static void bf_msp_send_rc_tuning() {
+    uint8_t p[14];
+    uint8_t idx = 0;
+
+    p[idx++] = 100;    // RC rate
+    p[idx++] = 0;      // RC expo
+    p[idx++] = 100;    // roll rate
+    p[idx++] = 100;    // pitch rate
+    p[idx++] = 100;    // yaw rate
+    p[idx++] = 0;      // dynamic throttle PID
+    p[idx++] = 0;      // throttle mid
+    p[idx++] = 0;      // throttle expo
+    PACK_U16_LE(p, idx, (uint16_t)3200);  // TPA breakpoint
+    p[idx++] = 0;      // RC yaw expo
+    p[idx++] = 0;      // RC yaw rate
+    p[idx++] = 0;      // RC pitch rate
+    p[idx++] = 0;      // RC pitch expo
+
+    bf_msp_send(MSP_RC_TUNING, p, idx);
+}
+
+// -------------------------------------------------------
+// MSP_PID (112) — 30 bytes
+// 10x PID sets, 3 bytes each (P, I, D)
+// DJI polls this — return safe defaults
+// -------------------------------------------------------
+static void bf_msp_send_pid() {
+    uint8_t p[30];
+    memset(p, 0, sizeof(p));
+
+    // Roll PID — bytes 0-2
+    p[0] = 45;   // P
+    p[1] = 40;   // I
+    p[2] = 20;   // D
+
+    // Pitch PID — bytes 3-5
+    p[3] = 47;
+    p[4] = 40;
+    p[5] = 22;
+
+    // Yaw PID — bytes 6-8
+    p[6] = 45;
+    p[7] = 45;
+    p[8] = 0;
+
+    bf_msp_send(MSP_PID, p, sizeof(p));
+}
+
+// -------------------------------------------------------
+// MSP_BATTERY_STATE (130) — 9 bytes
+// Polled by DJI O3/O4 for native battery voltage display.
+//
+// Byte layout:
+//   0     uint8   cell count
+//   1-2   uint16  battery capacity mAh
+//   3     uint8   battery voltage in 0.1V units
+//   4-5   uint16  drawn mAh
+//   6-7   uint16  current in 0.01A units
+//   8     uint8   battery state
+//                 0 = OK
+//                 1 = WARNING  (below 3.5V per cell)
+//                 2 = CRITICAL (below 3.3V per cell)
+//                 3 = NOT PRESENT
+// -------------------------------------------------------
+static void bf_msp_send_battery_state() {
+    uint8_t p[9];
+    uint8_t idx = 0;
+
+    uint16_t battMv = (_telemetry != nullptr)
+                      ? _telemetry->readBatteryMv() : 0;
+
+    // Detect cell count from voltage
+    // >12.6V = 4S, >9.0V = 3S, otherwise 2S
+    uint8_t cellCount;
+    if      (battMv > 12600) cellCount = 4;
+    else if (battMv >  9000) cellCount = 3;
+    else                     cellCount = 2;
+
+    // Voltage in 0.1V units — 11906mV / 100 = 119 = 11.9V
+    uint8_t vbat = (uint8_t)constrain(battMv / 100, 0, 255);
+
+    // Per-cell voltage for state determination
+    uint16_t cellMv = (cellCount > 0) ? (battMv / cellCount) : 0;
+
+    uint8_t battState;
+    if      (cellMv < 3300) battState = 2;   // CRITICAL
+    else if (cellMv < 3500) battState = 1;   // WARNING
+    else                    battState = 0;   // OK
+
+    p[idx++] = cellCount;                       // byte 0: cell count
+    PACK_U16_LE(p, idx, (uint16_t)0);           // bytes 1-2: capacity mAh unknown
+    p[idx++] = vbat;                            // byte 3: voltage in 0.1V units
+    PACK_U16_LE(p, idx, (uint16_t)0);           // bytes 4-5: drawn mAh
+    PACK_U16_LE(p, idx, (uint16_t)0);           // bytes 6-7: current 0.01A
+    p[idx++] = battState;                       // byte 8: battery state
+
+    //debug_dump_payload("BATTERY_STATE", MSP_BATTERY_STATE, p, idx);
+
+    bf_msp_send(MSP_BATTERY_STATE, p, idx);
+}
 
 // =======================================================
 // PRIVATE — VTX Detection
 // Called each time a valid MSP request is received.
-//
-// Observed poll patterns:
-// DJI V1: MSP_API_VERSION → MSP_FC_VARIANT → ...
-// starts with API_VERSION
-// DJI O3/O4: MSP_API_VERSION → MSP_STATUS_EX
-// Walksnail: MSP_STATUS (0x65) ONLY — never sends
-// MSP_API_VERSION at startup
 // =======================================================
 static void bf_msp_detect_vtx(uint8_t cmd) {
     if (_vtxType != VTX_UNKNOWN) return;
 
-    if (cmd == MSP_API_VERSION) _seenApiVersion = true;
-    if (cmd == MSP_FC_NAME) _seenFcName = true;
-    if (cmd == MSP_STATUS_EX) _seenStatusEx = true;
-
     static uint8_t frameCount = 0;
     frameCount++;
 
-    // Definitive DJI O3/O4 signal — STATUS_EX never sent by V1 or Avatar
-    if (_seenStatusEx) {
+    if (cmd == MSP_STATUS)       _seenStatus     = true;   // 0x65
+    if (cmd == MSP_STATUS_EX)    _seenStatusEx   = true;   // 0x96
+    if (cmd == MSP_DISPLAYPORT)  _seenDisplayPort = true;  // 0xB6
+
+    // 1. Walksnail — DISPLAYPORT but NO STATUS_EX
+    if (_seenDisplayPort && !_seenStatusEx) {
+        _vtxType = VTX_WALKSNAIL;
+        if (Serial) Serial.println("[MSP] VTX detected: Walksnail Avatar");
+        return;
+    }
+
+    // 2. DJI O3/O4 — STATUS + STATUS_EX (with or without DisplayPort)
+    if (_seenStatus && _seenStatusEx) {
         _vtxType = VTX_DJI_O3;
         if (Serial) Serial.println("[MSP] VTX detected: DJI O3/O4");
         return;
     }
 
-    // Walksnail Avatar — hammers MSP_STATUS only, never sends API_VERSION
-    if (cmd == MSP_STATUS && !_seenApiVersion && frameCount >= 5) {
-        _vtxType = VTX_WALKSNAIL;
-        if (Serial) Serial.println("[MSP] VTX detected: Walksnail Avatar");
-        return;
-    }
-
-    // Walksnail secondary signals
-    if (cmd == MSP_FC_NAME || cmd == MSP_OSD_CONFIG) {
-        _vtxType = VTX_WALKSNAIL;
-        if (Serial) Serial.println("[MSP] VTX detected: Walksnail Avatar");
-        return;
-    }
-
-    // DJI V1 fallback — API_VERSION seen but no STATUS_EX after 20 frames
-    if (_seenApiVersion && frameCount > 20 && !_seenStatusEx && !_seenFcName) {
+    // 3. DJI V1 — STATUS_EX only, no STATUS after some frames
+    if (_seenStatusEx && !_seenStatus && frameCount > 10) {
         _vtxType = VTX_DJI_V1;
         if (Serial) Serial.println("[MSP] VTX detected: DJI V1");
         return;
     }
 }
+
+
 
 // =======================================================
 // PRIVATE — Core MSP Frame Builder
@@ -273,7 +447,7 @@ static void bf_msp_send_fc_version() {
 }
 
 static void bf_msp_send_fc_name() {
-    const char* name = "QLite";
+    const char* name = "BTFL";
     bf_msp_send(MSP_FC_NAME, (const uint8_t*)name, (uint8_t)strlen(name));
 }
 
@@ -286,9 +460,11 @@ static void bf_msp_send_status(bool armed) {
 
     PACK_U16_LE(p, idx, (uint16_t)1000);         // cycle time
     PACK_U16_LE(p, idx, (uint16_t)0);            // i2c errors
-    PACK_U16_LE(p, idx, (uint16_t)SENSOR_BARO);  // sensors
+    PACK_U16_LE(p, idx, (uint16_t)(SENSOR_BARO | (1 << 5)));  // sensors
 
-    uint32_t flags = armed ? 1 : 0;
+    //uint32_t flags = armed ? 1 : 0;
+    uint32_t flags = armed ? ((1 << 0) | (1 << 2)) : 0;
+
     PACK_U32_LE(p, idx, flags);  // arming flags
 
     p[idx++] = 0;  // current profile
@@ -297,48 +473,90 @@ static void bf_msp_send_status(bool armed) {
 }
 
 // -------------------------------------------------------
-// MSP_STATUS_EX (150) — 16 bytes little-endian
-// Polled by DJI O3/O4 — never by Walksnail or V1
+// MSP_STATUS_EX (150) — 17 bytes little-endian
+//
+// Standard BF layout (15 bytes):
+//   0-1   uint16  cycle time (us)
+//   2-3   uint16  i2c error count
+//   4-5   uint16  sensor flags
+//   6-9   uint32  flight mode flags (bit 0 = armed)
+//   10    uint8   current PID profile index
+//   11-12 uint16  average system load %
+//   13-14 uint16  arming disable flags
+//
+// DJI O3/O4 extended (2 extra bytes):
+//   15-16 uint16  battery voltage in mV (DJI native voltage source)
+//
+// Adding the extra uint16 battMv is safe — BF ignores extra bytes
+// and DJI O3/O4 reads it for the native voltage overlay.
 // -------------------------------------------------------
 static void bf_msp_send_status_ex(bool armed) {
-    uint8_t p[16];
+    uint8_t p[17];
     uint8_t idx = 0;
 
+    // Bytes 0-1: cycle time
     PACK_U16_LE(p, idx, (uint16_t)1000);
+
+    // Bytes 2-3: i2c error count
     PACK_U16_LE(p, idx, (uint16_t)0);
+
+    // Bytes 4-5: sensor flags
     PACK_U16_LE(p, idx, (uint16_t)SENSOR_BARO);
 
+    // Bytes 6-9: flight mode flags (bit 0 = armed)
     uint32_t flags = armed ? 1 : 0;
     PACK_U32_LE(p, idx, flags);
 
+    // Byte 10: current PID profile index
     p[idx++] = 0;
 
+    // Bytes 11-12: average system load %
     PACK_U16_LE(p, idx, (uint16_t)0);
 
+    // Bytes 13-14: arming disable flags
     uint16_t armFlags = armed ? 0 : (uint16_t)ARMING_DISABLE_NO_GYRO;
     PACK_U16_LE(p, idx, armFlags);
 
-    uint16_t battMv = (_telemetry != nullptr) ? _telemetry->readBatteryMv() : 0;
-    p[idx++] = (uint8_t)constrain(battMv / 100, 0, 255);
+    // Bytes 15-16: battery voltage in mV — DJI O3/O4 native voltage source
+    // This is an extended field not in base BF spec but read by DJI firmware
+    uint16_t battMv = (_telemetry != nullptr)
+                      ? _telemetry->readBatteryMv() : 0;
+    PACK_U16_LE(p, idx, battMv);
+
+    //debug_dump_payload("STATUS_EX", MSP_STATUS_EX, p, idx);
 
     bf_msp_send(MSP_STATUS_EX, p, idx);
 }
 
 // -------------------------------------------------------
 // MSP_ANALOG (110) — 7 bytes little-endian
-// Used by DJI V1 for native voltage bar display
+//
+// Byte layout:
+//   0     uint8   battery voltage in 0.1V units
+//                 e.g. 11906 mV / 100 = 119 = 11.9V
+//   1-2   uint16  mAh drawn
+//   3-4   uint16  RSSI 0-1023
+//   5-6   uint16  current in 0.01A units
+//
+// DJI O3/O4 reads native voltage display from this frame.
 // -------------------------------------------------------
 static void bf_msp_send_analog() {
     uint8_t p[7];
     uint8_t idx = 0;
 
-    uint16_t battMv = (_telemetry != nullptr) ? _telemetry->readBatteryMv() : 0;
+    uint16_t battMv = (_telemetry != nullptr)
+                      ? _telemetry->readBatteryMv() : 0;
+
+    // Convert millivolts to 0.1V units
+    // 11906 mV / 100 = 119 = 11.9V
     uint8_t vbat = (uint8_t)constrain(battMv / 100, 0, 255);
 
-    p[idx++] = vbat;                   // battery voltage in 0.1V units
-    PACK_U16_LE(p, idx, (uint16_t)0);  // mAh drawn
-    PACK_U16_LE(p, idx, (uint16_t)0);  // rssi
-    PACK_U16_LE(p, idx, (uint16_t)0);  // current in 0.01A units
+    p[idx++] = vbat;                        // battery voltage in 0.1V units
+    PACK_U16_LE(p, idx, (uint16_t)0);       // mAh drawn
+    PACK_U16_LE(p, idx, (uint16_t)0);       // rssi 0-1023
+    PACK_U16_LE(p, idx, (uint16_t)0);       // current in 0.01A units
+
+    //debug_dump_payload("ANALOG", MSP_ANALOG, p, idx);
 
     bf_msp_send(MSP_ANALOG, p, idx);
 }
@@ -397,7 +615,7 @@ static void bf_msp_send_osd_config() {
         OSD_POS(1, 3, 10),    // vertical speed
         OSD_POS(1, 17, 20),   // arm state
         OSD_POS(1, 0, 10),  // flight mode
-        OSD_POS(1, 9, 25),   // crosshair
+        OSD_POS(1, 8, 15)  // crosshair
     };
 
     uint8_t numElements = sizeof(positions) / sizeof(positions[0]);
@@ -475,35 +693,23 @@ static void bf_msp_dp_write(uint8_t row, uint8_t col, const char* text,
 // =======================================================
 static void bf_msp_handle_request(uint8_t cmd) {
     switch (cmd) {
-        case MSP_API_VERSION:
-            bf_msp_send_api_version();
-            break;
-        case MSP_FC_VARIANT:
-            bf_msp_send_fc_variant();
-            break;
-        case MSP_FC_VERSION:
-            bf_msp_send_fc_version();
-            break;
-        case MSP_FC_NAME:
-            bf_msp_send_fc_name();
-            break;
-        case MSP_STATUS:
-            bf_msp_send_status(_isArmed);
-            break;
-        case MSP_STATUS_EX:
-            bf_msp_send_status_ex(_isArmed);
-            break;
-        case MSP_ANALOG:
-            bf_msp_send_analog();
-            break;
-        case MSP_ALTITUDE:
-            bf_msp_send_altitude();
-            break;
-        case MSP_OSD_CONFIG:
-            bf_msp_send_osd_config();
-            break;
+        case MSP_API_VERSION:    bf_msp_send_api_version();        break;
+        case MSP_FC_VARIANT:     bf_msp_send_fc_variant();         break;
+        case MSP_FC_VERSION:     bf_msp_send_fc_version();         break;
+        case MSP_FC_NAME:        bf_msp_send_fc_name();            break;
+        case MSP_STATUS:         bf_msp_send_status(_isArmed);     break;
+        case MSP_STATUS_EX:      bf_msp_send_status_ex(_isArmed);  break;
+        case MSP_RAW_IMU:        bf_msp_send_raw_imu();            break;
+        case MSP_SERVO:          bf_msp_send_servo();              break;
+        case MSP_RC:             bf_msp_send_rc();                 break;
+        case MSP_ANALOG:         bf_msp_send_analog();             break;
+        case MSP_RC_TUNING:      bf_msp_send_rc_tuning();          break;
+        case MSP_PID:            bf_msp_send_pid();                break;
+        case MSP_ALTITUDE:       bf_msp_send_altitude();           break;
+        case MSP_OSD_CONFIG:     bf_msp_send_osd_config();         break;
+        case MSP_BATTERY_STATE:  bf_msp_send_battery_state();      break;
         default:
-            // Send empty response — keeps Air Unit happy
+            // Return empty response so DJI does not time out
             bf_msp_send(cmd, nullptr, 0);
             break;
     }
@@ -513,9 +719,10 @@ static void bf_msp_handle_request(uint8_t cmd) {
 // PUBLIC — Initialisation
 // Call once from setup() before any other bf_msp function.
 // =======================================================
-void bf_msp_init(HardwareSerial& serial, Telemetry& telemetry) {
+void bf_msp_init(HardwareSerial& serial, Telemetry& telemetry, CrossfireELRS& elrs) {
     _serial = &serial;
     _telemetry = &telemetry;
+    _elrs = &elrs;
     _isArmed = false;
     _initialised = false;
     _firstbeatPending = false;
@@ -572,6 +779,10 @@ void bf_msp_parse_incoming() {
 
             case MSP_PARSE_CMD:
                 _parseCmd = c;
+                // Track FC_NAME only when the goggles REQUEST it
+                if (_parseCmd == MSP_FC_NAME) {
+                    _seenFcName = true;
+                }
                 _parseChecksum ^= c;
                 _parseIdx = 0;
                 _parseState =
@@ -589,9 +800,11 @@ void bf_msp_parse_incoming() {
             case MSP_PARSE_CHECKSUM:
                 if (c == _parseChecksum) {
                     // Respond first, then update detection state
+                    Serial.print("[MSP] POLL CMD: 0x");
+                    Serial.println(_parseCmd, HEX);
                     bf_msp_handle_request(_parseCmd);
                     bf_msp_detect_vtx(_parseCmd);
-
+                    // In bf_msp_parse_incoming() checksum case — temporary poll logger
                     if (!_initialised) {
                         _initialised = true;
                         _firstbeatPending = true;
@@ -658,17 +871,18 @@ void bf_msp_firstbeat_update() {
             bf_msp_send_fc_name();
             break;
         case 4:
-            bf_msp_send_osd_config();
-            break;
-        case 5:
-            bf_msp_send_status(_isArmed);
-            break;
-        case 6:
-            bf_msp_send_status_ex(_isArmed);
-            break;
-        case 7:
             bf_msp_send_analog();
             break;
+        case 5:
+            bf_msp_send_osd_config();
+            break;
+        case 6:
+            bf_msp_send_status(_isArmed);
+            break;
+        case 7:
+            bf_msp_send_status_ex(_isArmed);
+            break;
+
         case 8:
             if (_vtxType == VTX_DJI_O3 || _vtxType == VTX_WALKSNAIL) {
                 bf_msp_dp_heartbeat();
@@ -712,14 +926,15 @@ void bf_msp_heartbeat_update(bool armed) {
             bf_msp_send_status(_isArmed);
             break;
         case 1:
-            bf_msp_send_analog();
+            bf_msp_send_status_ex(_isArmed);   // <-- REQUIRED FOR DJI NATIVE VOLTAGE
             break;
         case 2:
-            bf_msp_send_altitude();
+            bf_msp_send_analog();
             break;
         case 3:
-            // DisplayPort heartbeat for Avatar and O3/O4 only
-            // Avatar requires this periodically or shows disconnect warning
+            bf_msp_send_altitude();
+            break;
+        case 4:
             if (_vtxType == VTX_WALKSNAIL || _vtxType == VTX_DJI_O3) {
                 uint32_t nowDp = millis();
                 if (nowDp - _lastDpHeartbeatMs >= MSP_DP_HEARTBEAT_MS) {
@@ -817,63 +1032,145 @@ void bf_msp_dp_update_osd_nb() {
         // Step 1 — Battery voltage
         // -------------------------------------------------------
         case 1:
-            snprintf(buf, sizeof(buf), "V:%5.1f", voltV);
-            bf_msp_dp_write(1, 10, buf, 0);
+            if (_vtxType == VTX_WALKSNAIL) {
+                // Walksnail — lowercase 'v' becomes a battery icon
+                snprintf(buf, sizeof(buf), "v%5.2fV", voltV);
+                bf_msp_dp_write(1, 10, buf, 0);
+
+            } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
+                // DJI — no battery icon, so use uppercase V
+                snprintf(buf, sizeof(buf), "V:%5.2fV", voltV);
+                bf_msp_dp_write(1, 10, buf, 0);
+
+            } else {
+                // Unknown VTX — safest fallback is plain ASCII
+                snprintf(buf, sizeof(buf), "V:%5.2fV", voltV);
+                bf_msp_dp_write(1, 10, buf, 0);
+            }
             break;
 
         // -------------------------------------------------------
         // Step 2 — Altitude
         // -------------------------------------------------------
         case 2:
+            if (_vtxType == VTX_WALKSNAIL) {
+                // Walksnail — safe uppercase characters only
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-            snprintf(buf, sizeof(buf), "A:%5.1f'", altM);     // feet
+                snprintf(buf, sizeof(buf), "A:%5.1f'", altM);   // feet
 #else
-            snprintf(buf, sizeof(buf), "A:%5.1fM", altM);     // meters
+                snprintf(buf, sizeof(buf), "A:%5.1fM", altM);   // meters
 #endif
-            bf_msp_dp_write(2, 10, buf, 0);
+                bf_msp_dp_write(2, 10, buf, 0);
+
+            } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
+                // DJI — same characters, DJI-safe
+#if OSD_UNITS == OSD_UNITS_IMPERIAL
+                snprintf(buf, sizeof(buf), "A:%5.1fF", altM);   // feet
+#else
+                snprintf(buf, sizeof(buf), "A:%5.1fM", altM);   // meters
+#endif
+                bf_msp_dp_write(2, 10, buf, 0);
+
+            } else {
+                // Unknown VTX — safest fallback
+#if OSD_UNITS == OSD_UNITS_IMPERIAL
+                snprintf(buf, sizeof(buf), "A:%5.1f'", altM);
+#else
+                snprintf(buf, sizeof(buf), "A:%5.1fM", altM);
+#endif
+                bf_msp_dp_write(2, 10, buf, 0);
+            }
             break;
+
 
         // -------------------------------------------------------
         // Step 3 — Vertical speed
         // -------------------------------------------------------
         case 3:
+            if (_vtxType == VTX_WALKSNAIL) {
+                // Walksnail — safe uppercase characters only
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-            snprintf(buf, sizeof(buf), "VS:%+5.1f'/S", vspeedMs);  // ft/s
+                snprintf(buf, sizeof(buf), "VS:%+5.1f'/S", vspeedMs);   // ft/s
 #else
-            snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);  // m/s
+                snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);   // m/s
 #endif
-            bf_msp_dp_write(3, 10, buf, 0);
+                bf_msp_dp_write(3, 10, buf, 0);
+
+            } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
+                // DJI — same characters, DJI-safe
+#if OSD_UNITS == OSD_UNITS_IMPERIAL
+                snprintf(buf, sizeof(buf), "VS:%+5.1fF/S", vspeedMs);   // ft/s
+#else
+                snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);   // m/s
+#endif
+                bf_msp_dp_write(3, 10, buf, 0);
+
+            } else {
+                // Unknown VTX — safest fallback
+#if OSD_UNITS == OSD_UNITS_IMPERIAL
+                snprintf(buf, sizeof(buf), "VS:%+5.1f'/S", vspeedMs);
+#else
+                snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);
+#endif
+                bf_msp_dp_write(3, 10, buf, 0);
+            }
             break;
 
         // -------------------------------------------------------
-        // Step 4 — Arm state
+        // Step 4 — Link Quality
         // -------------------------------------------------------
-        case 4:
+        case 4: {
+            uint8_t lq = (_elrs != nullptr) ? _elrs->getLinkQuality() : 0;
+
+            if (_vtxType == VTX_WALKSNAIL) {
+                snprintf(buf, sizeof(buf), "r%3u%%", lq);   // Walksnail RSSI icon
+                bf_msp_dp_write(1, 25, buf, 0);
+
+            } else {
+                snprintf(buf, sizeof(buf), "LQ:%3u%%", lq);
+                bf_msp_dp_write(1, 25, buf, 0);
+            }
+            break;
+        }
+
+        // -------------------------------------------------------
+        // Step 5 — Arm state
+        // -------------------------------------------------------
+        case 5:
             if (armed) {
-                bf_msp_dp_write(17, 20, "*** ARMED ***", 1);
+                bf_msp_dp_write(17, 22, "   ARMED   ", 0);
             } else {
                 bf_msp_dp_write(17, 20, "  DISARMED   ", 0);
             }
             break;
 
         // -------------------------------------------------------
-        // Step 5 — Flight mode
+        // Step 6 — Flight mode
         // -------------------------------------------------------
-        case 5:
+        case 6:
             bf_msp_dp_write(0, 10, "QLITE", 0);
             break;
 
         // -------------------------------------------------------
-        // Step 6 — Crosshair
+        // Step 7 — Crosshair
         // -------------------------------------------------------
-        case 6:
-            bf_msp_dp_write(9, 25, "s", 0);   // Walksnail crosshair icon
+        case 7:
+                if (_vtxType == VTX_WALKSNAIL) {
+                    // Walksnail crosshair icon
+                    bf_msp_dp_write(9, 25, "s", 0);
+                } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
+                    // DJI has no crosshair icon — use blank
+                    bf_msp_dp_write(9, 25, " ", 0);
+                } else {
+                    // Unknown VTX — safest fallback is no icon
+                    bf_msp_dp_write(9, 25, " ", 0);
+                }
             break;
 
         // -------------------------------------------------------
-        // Step 7 — Commit frame
+        // Step 8 — Commit frame
         // -------------------------------------------------------
-        case 7:
+        case 8:
             bf_msp_dp_draw();
             break;
 

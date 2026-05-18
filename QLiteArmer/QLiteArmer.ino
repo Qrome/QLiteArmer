@@ -97,7 +97,7 @@ void setup1() {
     telemetry.begin();
 
     // MSP subsystem
-    bf_msp_init(Serial1, telemetry);
+    bf_msp_init(Serial1, telemetry, crsf);
 
     // LED
     ledInit();

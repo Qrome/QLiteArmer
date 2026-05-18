@@ -13,6 +13,7 @@
 
 #include <Arduino.h>
 #include "Telemetry.h"
+#include "CrossfireELRS.h"
 
 // -------------------------------------------------------
 // VTX System Type
@@ -31,7 +32,7 @@ typedef enum {
 
 // Call once on startup — pass the serial port used for MSP
 // and the Telemetry instance for voltage/altitude data
-void bf_msp_init(HardwareSerial& serial, Telemetry& telemetry);
+void bf_msp_init(HardwareSerial& serial, Telemetry& telemetry, CrossfireELRS& elrs);
 
 // Call every loop() on the MSP core
 // Reads incoming bytes from the Air Unit and responds to polls
