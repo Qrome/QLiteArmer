@@ -139,10 +139,11 @@ static uint32_t _osdStepMs = 0;
 static bool _seenApiVersion = false;
 static bool _seenFcName = false;
 static bool _seenStatusEx = false;
-static bool _seenDisplayPort = false;
 static bool _seenOsdConfig = false;
 static bool _seenStatus = false;
-
+static bool _seenAttitude   = false;   // 0x6A
+static bool _seenDisplayPort = false;  // 0xB6 (Walksnail only)
+static bool _seenV1Only = false;
 
 // Tracks whether DisplayPort canvas ownership has been claimed
 static bool _dpReleased = false;
@@ -362,31 +363,43 @@ static void bf_msp_send_battery_state() {
 static void bf_msp_detect_vtx(uint8_t cmd) {
     if (_vtxType != VTX_UNKNOWN) return;
 
-    static uint8_t frameCount = 0;
-    frameCount++;
+    static uint32_t firstMs = 0;
+    static bool started = false;
 
-    if (cmd == MSP_STATUS)       _seenStatus     = true;   // 0x65
-    if (cmd == MSP_STATUS_EX)    _seenStatusEx   = true;   // 0x96
-    if (cmd == MSP_DISPLAYPORT)  _seenDisplayPort = true;  // 0xB6
+    if (!started) {
+        started = true;
+        firstMs = millis();
+    }
+
+    uint32_t elapsed = millis() - firstMs;
+
+    if (cmd == MSP_STATUS_EX)    _seenStatusEx = true;
+    if (cmd == MSP_DISPLAYPORT)  _seenDisplayPort = true;
+
+    // V1-only commands
+    if (cmd == 0x6A || cmd == 0x6B || cmd == 0x6C ||
+        cmd == 0x6D || cmd == 0x86 || cmd == 0xF7) {
+        _seenV1Only = true;
+    }
 
     // 1. Walksnail — DISPLAYPORT but NO STATUS_EX
     if (_seenDisplayPort && !_seenStatusEx) {
         _vtxType = VTX_WALKSNAIL;
-        if (Serial) Serial.println("[MSP] VTX detected: Walksnail Avatar");
+        Serial.println("[MSP] VTX detected: Walksnail Avatar");
         return;
     }
 
-    // 2. DJI O3/O4 — STATUS + STATUS_EX (with or without DisplayPort)
-    if (_seenStatus && _seenStatusEx) {
-        _vtxType = VTX_DJI_O3;
-        if (Serial) Serial.println("[MSP] VTX detected: DJI O3/O4");
-        return;
-    }
-
-    // 3. DJI V1 — STATUS_EX only, no STATUS after some frames
-    if (_seenStatusEx && !_seenStatus && frameCount > 10) {
+    // 2. DJI V1 — STATUS_EX + any V1-only command
+    if (_seenStatusEx && _seenV1Only) {
         _vtxType = VTX_DJI_V1;
-        if (Serial) Serial.println("[MSP] VTX detected: DJI V1");
+        Serial.println("[MSP] VTX detected: DJI V1");
+        return;
+    }
+
+    // 3. DJI O3/O4 — STATUS_EX but NO V1-only commands after 300ms
+    if (_seenStatusEx && !_seenV1Only && elapsed > 300) {
+        _vtxType = VTX_DJI_O3;
+        Serial.println("[MSP] VTX detected: DJI O3/O4");
         return;
     }
 }
@@ -800,8 +813,8 @@ void bf_msp_parse_incoming() {
             case MSP_PARSE_CHECKSUM:
                 if (c == _parseChecksum) {
                     // Respond first, then update detection state
-                    Serial.print("[MSP] POLL CMD: 0x");
-                    Serial.println(_parseCmd, HEX);
+                    //Serial.print("[MSP] POLL CMD: 0x");
+                    //Serial.println(_parseCmd, HEX);
                     bf_msp_handle_request(_parseCmd);
                     bf_msp_detect_vtx(_parseCmd);
                     // In bf_msp_parse_incoming() checksum case — temporary poll logger
