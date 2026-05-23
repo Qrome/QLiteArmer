@@ -8,6 +8,15 @@ This project is designed for FPV pilots, RC builders, and embedded developers wh
 
 ## ✨ Features
 
+### **Pin Map Summary**
+| Function | Pin(s) | Notes |
+| --- | --- | --- |
+| **CRSF / ELRS UART** | GP8 (TX), GP9 (RX) | Primary RC link |
+| **MSP UART (VTX)** | GP0 (TX), GP1 (RX) | DJI / Walksnail |
+| **I²C (BMP280)** | GP4 (SDA), GP5 (SCL) | Barometer |
+| **VBAT ADC** | GP26 | Voltage divider |
+| **PWM CH1–CH8** | 13, 12, 11, 10, 7, 6, 3, 2 | Servo/motor outputs |
+
 ### **MSP‑Driven Auto‑Arming**
 - Automatically detects DJI O4 / Vista / Air Unit via MSP telemetry.
 - Fully non‑blocking MSP parser ensures reliable detection.
