@@ -16,6 +16,7 @@ This project is designed for FPV pilots, RC builders, and embedded developers wh
 | **I²C (BMP280)** | GP4 (SDA), GP5 (SCL) | Barometer |
 | **VBAT ADC** | GP26 | Voltage divider |
 | **PWM CH1–CH8** | 13, 12, 11, 10, 7, 6, 3, 2 | Servo/motor outputs |
+| **RGB LED** | GP16 | Built in Indicator |
 
 ### **MSP‑Driven Auto‑Arming**
 - Automatically detects DJI O4 / Vista / Air Unit via MSP telemetry.
