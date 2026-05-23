@@ -144,6 +144,7 @@ static bool _seenStatus = false;
 static bool _seenAttitude   = false;   // 0x6A
 static bool _seenDisplayPort = false;  // 0xB6 (Walksnail only)
 static bool _seenV1Only = false;
+static uint16_t _statusCount = 0;
 
 // Tracks whether DisplayPort canvas ownership has been claimed
 static bool _dpReleased = false;
@@ -382,28 +383,32 @@ static void bf_msp_detect_vtx(uint8_t cmd) {
         _seenV1Only = true;
     }
 
-    // 1. Walksnail — DISPLAYPORT but NO STATUS_EX
-    if (_seenDisplayPort && !_seenStatusEx) {
+    // Count MSP_STATUS floods
+    if (cmd == MSP_STATUS) {
+        _statusCount++;
+    }
+
+    // 1. Walksnail — flood of STATUS, no STATUS_EX, no V1-only commands
+    if (_statusCount > 20 && !_seenStatusEx && !_seenV1Only) {
         _vtxType = VTX_WALKSNAIL;
         Serial.println("[MSP] VTX detected: Walksnail Avatar");
         return;
     }
 
-    // 2. DJI V1 — STATUS_EX + any V1-only command
+    // 2. DJI V1 — STATUS_EX + V1-only commands
     if (_seenStatusEx && _seenV1Only) {
         _vtxType = VTX_DJI_V1;
         Serial.println("[MSP] VTX detected: DJI V1");
         return;
     }
 
-    // 3. DJI O3/O4 — STATUS_EX but NO V1-only commands after 300ms
+    // 3. DJI O3/O4 — STATUS_EX but no V1-only commands
     if (_seenStatusEx && !_seenV1Only && elapsed > 300) {
         _vtxType = VTX_DJI_O3;
         Serial.println("[MSP] VTX detected: DJI O3/O4");
         return;
     }
 }
-
 
 
 // =======================================================
@@ -1046,8 +1051,8 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         case 1:
             if (_vtxType == VTX_WALKSNAIL) {
-                // Walksnail — lowercase 'v' becomes a battery icon
-                snprintf(buf, sizeof(buf), "v%5.2fV", voltV);
+                // Walksnail
+                snprintf(buf, sizeof(buf), "V%5.2fV", voltV);
                 bf_msp_dp_write(1, 10, buf, 0);
 
             } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
@@ -1069,7 +1074,7 @@ void bf_msp_dp_update_osd_nb() {
             if (_vtxType == VTX_WALKSNAIL) {
                 // Walksnail — safe uppercase characters only
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "A:%5.1f'", altM);   // feet
+                snprintf(buf, sizeof(buf), "A:%5.1fF", altM);   // feet
 #else
                 snprintf(buf, sizeof(buf), "A:%5.1fM", altM);   // meters
 #endif
@@ -1087,7 +1092,7 @@ void bf_msp_dp_update_osd_nb() {
             } else {
                 // Unknown VTX — safest fallback
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "A:%5.1f'", altM);
+                snprintf(buf, sizeof(buf), "A:%5.1fF", altM);
 #else
                 snprintf(buf, sizeof(buf), "A:%5.1fM", altM);
 #endif
@@ -1103,7 +1108,7 @@ void bf_msp_dp_update_osd_nb() {
             if (_vtxType == VTX_WALKSNAIL) {
                 // Walksnail — safe uppercase characters only
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "VS:%+5.1f'/S", vspeedMs);   // ft/s
+                snprintf(buf, sizeof(buf), "VS:%+5.1fF/S", vspeedMs);   // ft/s
 #else
                 snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);   // m/s
 #endif
@@ -1121,7 +1126,7 @@ void bf_msp_dp_update_osd_nb() {
             } else {
                 // Unknown VTX — safest fallback
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "VS:%+5.1f'/S", vspeedMs);
+                snprintf(buf, sizeof(buf), "VS:%+5.1fF/S", vspeedMs);
 #else
                 snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);
 #endif
@@ -1136,7 +1141,7 @@ void bf_msp_dp_update_osd_nb() {
             uint8_t lq = (_elrs != nullptr) ? _elrs->getLinkQuality() : 0;
 
             if (_vtxType == VTX_WALKSNAIL) {
-                snprintf(buf, sizeof(buf), "r%3u%%", lq);   // Walksnail RSSI icon
+                snprintf(buf, sizeof(buf), "LQ:%3u%%", lq);   // Walksnail RSSI icon
                 bf_msp_dp_write(1, 25, buf, 0);
 
             } else {
