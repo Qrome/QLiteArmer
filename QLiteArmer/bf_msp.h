@@ -14,6 +14,8 @@
 #include <Arduino.h>
 #include "Telemetry.h"
 #include "CrossfireELRS.h"
+#include "SharedTelemetry.h"
+
 
 // -------------------------------------------------------
 // VTX System Type

@@ -80,3 +80,23 @@ static const uint8_t BAD_CHECKSUM_THRESHOLD   = 3;
 // LED
 static const uint8_t LED_PIN   = 16;   // RP2040-Zero onboard WS2812
 static const uint8_t LED_COUNT = 1;
+
+// 16‑direction home arrow glyphs (rows 96–111), CCW, 22.5° per step
+static const uint8_t arrowRows[16] = {
+    96,  //   0° DOWN
+    97,  //  22.5° DOWN‑LEFT
+    98,  //  45° DOWN‑LEFT
+    99,  //  67.5° DOWN‑LEFT
+    100, //  90° LEFT
+    101, // 112.5° UP‑LEFT
+    102, // 135° UP‑LEFT
+    103, // 157.5° UP‑LEFT
+    104, // 180° UP
+    105, // 202.5° UP‑RIGHT
+    106, // 225° UP‑RIGHT
+    107, // 247.5° UP‑RIGHT
+    108, // 270° RIGHT
+    109, // 292.5° DOWN‑RIGHT
+    110, // 315° DOWN‑RIGHT
+    111  // 337.5° DOWN‑RIGHT
+};

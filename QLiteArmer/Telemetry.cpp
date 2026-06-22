@@ -396,3 +396,4 @@ void Telemetry::sendFrame(uint8_t frameType, const uint8_t* payload,
     }
     Serial2.write(crc);  // [N+1] checksum
 }
+

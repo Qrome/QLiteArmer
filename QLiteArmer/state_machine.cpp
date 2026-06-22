@@ -20,6 +20,7 @@ void enterState(SystemState s) {
         case STATE_ARMED:         ledGreen(); break;
         case STATE_ERROR:         ledOff();   break;
     }
+    Serial.println(s);
 }
 
 // ---------------------------------------------------------
@@ -70,9 +71,9 @@ void stateMachineUpdate(uint16_t armValue, bool linkActive) {
                 // else: stay in PRE_ARM_DELAY waiting for arm switch
             } else {
                 // No CRSF signal — fall back to timer-based auto-arm
-                if (now - stateStart > PRE_ARM_DELAY_MS) {
-                    enterState(STATE_ARMED);
-                }
+                //if (now - stateStart > PRE_ARM_DELAY_MS) {
+                //    enterState(STATE_ARMED);
+                //}
             }
         }
         break;

@@ -17,6 +17,9 @@ Fits within both O3/O4 (53x20) and Avatar (50x18).
 
 #include "Telemetry.h"
 #include "bf_msp.h"
+#include "SharedTelemetry.h"
+#include "config.h"
+
 
 // -------------------------------------------------------
 // Module-level references
@@ -117,6 +120,9 @@ static uint8_t _parseCmd = 0;
 static uint8_t _parseChecksum = 0;
 static uint8_t _parseIdx = 0;
 static uint8_t _parseBuf[64];
+
+static bool gpsFlashState = false;
+static uint32_t gpsFlashMs = 0;
 
 // -------------------------------------------------------
 // Internal module state
@@ -969,6 +975,21 @@ void bf_msp_heartbeat_update(bool armed) {
     _heartbeatStep++;
 }
 
+// Convert angle → 0–15 arrow index (CCW, 22.5° steps)
+static inline uint8_t getArrowIndex(float angleDeg)
+{
+    while (angleDeg < 0) angleDeg += 360.0f;
+    while (angleDeg >= 360) angleDeg -= 360.0f;
+    return (uint8_t)((angleDeg + 11.25f) / 22.5f) & 0x0F;
+}
+
+// Convert row number → glyph character
+static inline char glyphFromRow(uint8_t row)
+{
+    return (char)row;
+}
+
+
 // =======================================================
 // PUBLIC — bf_msp_dp_update_osd_nb()
 // Non-blocking DisplayPort OSD writer.
@@ -1003,6 +1024,7 @@ void bf_msp_dp_update_osd_nb() {
     static float altM = 0.0f;       // meters OR feet depending on config
     static float vspeedMs = 0.0f;   // m/s OR ft/s depending on config
     static bool armed = false;
+    static float distM = 0.0f;
 
     char buf[32];
 
@@ -1019,6 +1041,12 @@ void bf_msp_dp_update_osd_nb() {
                 return;
             }
 
+            // Toggle GPS flash state every 500ms
+            if (now - gpsFlashMs > 500) {
+                gpsFlashMs = now;
+                gpsFlashState = !gpsFlashState;
+            }
+
             // Battery voltage
             voltV = (_telemetry != nullptr)
                         ? _telemetry->readBatteryMv() / 1000.0f
@@ -1032,6 +1060,7 @@ void bf_msp_dp_update_osd_nb() {
                 float vsCms = (_telemetry != nullptr)
                                   ? _telemetry->readVSpeedCms()
                                   : 0.0f;
+                distM = sharedTelem.gpsDistHomeM;
 
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
                 altM     = altCm * 0.0328084f;     // feet
@@ -1052,7 +1081,7 @@ void bf_msp_dp_update_osd_nb() {
         case 1:
             if (_vtxType == VTX_WALKSNAIL) {
                 // Walksnail
-                snprintf(buf, sizeof(buf), "V%5.2fV", voltV);
+                snprintf(buf, sizeof(buf), "%c%5.2f%c", 144, voltV, 6);
                 bf_msp_dp_write(1, 10, buf, 0);
 
             } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
@@ -1074,29 +1103,29 @@ void bf_msp_dp_update_osd_nb() {
             if (_vtxType == VTX_WALKSNAIL) {
                 // Walksnail — safe uppercase characters only
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "A:%5.1fF", altM);   // feet
+                snprintf(buf, sizeof(buf), "%4.0f%c%c", altM, 15, 127);   // feet
 #else
-                snprintf(buf, sizeof(buf), "A:%5.1fM", altM);   // meters
+                snprintf(buf, sizeof(buf), "%5.1f%c%c", altM, 12, 127);   // meters
 #endif
-                bf_msp_dp_write(2, 10, buf, 0);
+                bf_msp_dp_write(1, 34, buf, 0);
 
             } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
                 // DJI — same characters, DJI-safe
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "A:%5.1fF", altM);   // feet
+                snprintf(buf, sizeof(buf), "A:%4.0fF", altM);   // feet
 #else
                 snprintf(buf, sizeof(buf), "A:%5.1fM", altM);   // meters
 #endif
-                bf_msp_dp_write(2, 10, buf, 0);
+                bf_msp_dp_write(1, 34, buf, 0);
 
             } else {
                 // Unknown VTX — safest fallback
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "A:%5.1fF", altM);
+                snprintf(buf, sizeof(buf), "A:%4.0fF", altM);
 #else
                 snprintf(buf, sizeof(buf), "A:%5.1fM", altM);
 #endif
-                bf_msp_dp_write(2, 10, buf, 0);
+                bf_msp_dp_write(1, 34, buf, 0);
             }
             break;
 
@@ -1108,11 +1137,11 @@ void bf_msp_dp_update_osd_nb() {
             if (_vtxType == VTX_WALKSNAIL) {
                 // Walksnail — safe uppercase characters only
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "VS:%+5.1fF/S", vspeedMs);   // ft/s
+                snprintf(buf, sizeof(buf), "VS:%+5.1f%c", vspeedMs, 153);   // ft/s
 #else
-                snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);   // m/s
+                snprintf(buf, sizeof(buf), "VS:%+5.1f%c", vspeedMs, 159);   // m/s
 #endif
-                bf_msp_dp_write(3, 10, buf, 0);
+                bf_msp_dp_write(2, 10, buf, 0);
 
             } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
                 // DJI — same characters, DJI-safe
@@ -1121,7 +1150,7 @@ void bf_msp_dp_update_osd_nb() {
 #else
                 snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);   // m/s
 #endif
-                bf_msp_dp_write(3, 10, buf, 0);
+                bf_msp_dp_write(2, 10, buf, 0);
 
             } else {
                 // Unknown VTX — safest fallback
@@ -1130,7 +1159,7 @@ void bf_msp_dp_update_osd_nb() {
 #else
                 snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);
 #endif
-                bf_msp_dp_write(3, 10, buf, 0);
+                bf_msp_dp_write(2, 10, buf, 0);
             }
             break;
 
@@ -1141,20 +1170,171 @@ void bf_msp_dp_update_osd_nb() {
             uint8_t lq = (_elrs != nullptr) ? _elrs->getLinkQuality() : 0;
 
             if (_vtxType == VTX_WALKSNAIL) {
-                snprintf(buf, sizeof(buf), "LQ:%3u%%", lq);   // Walksnail RSSI icon
-                bf_msp_dp_write(1, 25, buf, 0);
+                snprintf(buf, sizeof(buf), "%3u%%%c", lq, 123);   // Walksnail RSSI icon
+                bf_msp_dp_write(0, 23, buf, 0);
 
             } else {
-                snprintf(buf, sizeof(buf), "LQ:%3u%%", lq);
-                bf_msp_dp_write(1, 25, buf, 0);
+                snprintf(buf, sizeof(buf), "%3u%%%c", lq, 1);
+                bf_msp_dp_write(0, 23, buf, 0);
             }
             break;
         }
 
         // -------------------------------------------------------
-        // Step 5 — Arm state
+        // Distance From Home
         // -------------------------------------------------------
-        case 5:
+        case 5: {
+            float d = distM;
+            char dbuf[16];
+        
+        #if OSD_UNITS == OSD_UNITS_IMPERIAL
+            float ft = d * 3.28084f;
+            if (_vtxType == VTX_WALKSNAIL) {
+                if (ft < 5280.0f) {
+                snprintf(dbuf, sizeof(dbuf), "%3.0f%c%c", ft, 15, 5);
+                } else {
+                    float mi = ft / 5280.0f;
+                    snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c", mi, 126, 5);
+                }
+            } else { // DJI
+                if (ft < 5280.0f) {
+                    snprintf(dbuf, sizeof(dbuf), "%3.0f%cF", ft, 5);
+                } else {
+                    float mi = ft / 5280.0f;
+                    snprintf(dbuf, sizeof(dbuf), "%1.2fMI%c", mi, 5);
+                }
+            }
+        #else
+            if (_vtxType == VTX_WALKSNAIL) {
+                if (d < 1000.0f) {
+                    snprintf(dbuf, sizeof(dbuf), "%c%3.0f%c", 5, d, 12);
+                } else {
+                    float km = d / 1000.0f;
+                    snprintf(dbuf, sizeof(dbuf), "%c%1.2f%c", 5, km, 125);
+                }
+            } else { // DJI
+                if (d < 1000.0f) {
+                    snprintf(dbuf, sizeof(dbuf), "%c%3.0fM", 5, d);
+                } else {
+                    float km = d / 1000.0f;
+                    snprintf(dbuf, sizeof(dbuf), "%c%1.1fKM", 5, km);
+                }
+            }
+        #endif
+
+            bf_msp_dp_write(0, 35, dbuf, 0);
+
+            // -------------------------------------------------------
+            // Home-direction arrow (SharedTelemetry version)
+            // -------------------------------------------------------
+            if (sharedTelem.gpsFix) {
+
+                float angle = sharedTelem.gpsBearingToHomeDeg;
+                uint8_t idx = getArrowIndex(angle);
+
+                char arrowGlyph = glyphFromRow(arrowRows[idx]);
+                char abuf[2] = { arrowGlyph, 0 };
+
+                bf_msp_dp_write(8, 25, abuf, 0);
+            }
+
+            // Number of Satallites
+            uint8_t sats = sharedTelem.gpsSats;
+
+            // Flash until GPS fix + 6 sats
+            bool gpsLocked = (sharedTelem.gpsFix && sats >= 6);
+
+            if (!gpsLocked && gpsFlashState) {
+                // Flash OFF state → draw blanks
+                bf_msp_dp_write(0, 4, "     ", 0);
+            } else {
+                // Solid ON state
+                snprintf(buf, sizeof(buf), "%2u%c%c", sats, 30, 31);
+                bf_msp_dp_write(0, 3, buf, 0);
+            }
+
+
+            // -------------------------------------------------------
+            // GPS Ground Speed (mph or kph, clamped to 3 digits)
+            // -------------------------------------------------------
+            float gsCms = sharedTelem.gpsGroundSpeedCms;
+
+            #if OSD_UNITS == OSD_UNITS_IMPERIAL
+                float mph = gsCms * 0.0223694f;   // cm/s → mph
+                if (mph > 999.0f) mph = 999.0f;   // clamp to 3 digits
+
+                if (_vtxType == VTX_WALKSNAIL) {
+                    // Walksnail-safe
+                    snprintf(buf, sizeof(buf), "%3.0f%c%c", mph, 157, 112);
+                } else {
+                    // DJI-safe: plain ASCII
+                    snprintf(buf, sizeof(buf), "%3.0f%c%c", mph, 157, 112);
+                }
+
+            #else
+                float kph = gsCms * 0.036f;       // cm/s → kph
+                if (kph > 999.0f) kph = 999.0f;
+
+                if (_vtxType == VTX_WALKSNAIL) {
+                    // Walksnail-safe
+                    snprintf(buf, sizeof(buf), "%03.0f%c%c", kph, 158, 112);
+                } else {
+                    // DJI-safe: plain ASCII
+                    snprintf(buf, sizeof(buf), "%03.0f%c%c", kph, 158, 112);
+                }
+            #endif
+
+            bf_msp_dp_write(2, 35, buf, 0);
+            
+            // -------------------------------------------------------
+            // Total Distance Traveled
+            // -------------------------------------------------------
+            float totalM = sharedTelem.gpsTotalDistM;
+
+            #if OSD_UNITS == OSD_UNITS_IMPERIAL
+                float totalFt = totalM * 3.28084f;
+                if (_vtxType == VTX_WALKSNAIL) {
+                    if (totalFt < 5280.0f) {
+                        // Under 1 mile → feet
+                        snprintf(buf, sizeof(buf), "%4.0f%c%c", totalFt, 15, 113);
+                    } else {
+                        // Miles
+                        float mi = totalFt / 5280.0f;
+                        snprintf(buf, sizeof(buf), "%1.2f%c%c", mi, 126, 113);
+                    }
+                } else { // DJI
+                    if (totalFt < 5280.0f) {
+                        // Under 1 mile → feet
+                        snprintf(buf, sizeof(buf), "%4.0fFT%c", totalFt, 113);
+                    } else {
+                        // Miles
+                        float mi = totalFt / 5280.0f;
+                        snprintf(buf, sizeof(buf), "%1.2fMI%c", mi, 113);
+                    }
+                }
+
+            #else
+                if (totalM < 1000.0f) {
+                    // Under 1 km → meters
+                    snprintf(buf, sizeof(buf), "%3.0fM", totalM);
+                } else {
+                    // Kilometers
+                    float km = totalM / 1000.0f;
+                    snprintf(buf, sizeof(buf), "%1.2fKM", km);
+                }
+            #endif
+
+            // Display at (3, 35) — adjust if needed
+            bf_msp_dp_write(17, 36, buf, 0);
+
+            break;
+        }
+
+
+        // -------------------------------------------------------
+        // Arm state
+        // -------------------------------------------------------
+        case 6:
             if (armed) {
                 bf_msp_dp_write(17, 22, "   ARMED   ", 0);
             } else {
@@ -1163,16 +1343,42 @@ void bf_msp_dp_update_osd_nb() {
             break;
 
         // -------------------------------------------------------
-        // Step 6 — Flight mode
+        // Step 7 — Latitude & Longitude
         // -------------------------------------------------------
-        case 6:
+        case 7: {
+            if (sharedTelem.gpsFix) {
+
+                // Format: ±XX.XXXXXX
+                float lat = sharedTelem.gpsLatDeg;
+                float lon = sharedTelem.gpsLonDeg;
+
+                // Walksnail-safe characters only
+                snprintf(buf, sizeof(buf), "%c%+2.6f", 137, lat); 
+                bf_msp_dp_write(16, 0, buf, 0);
+
+                snprintf(buf, sizeof(buf), "%c%+3.6f", 152, lon);
+                bf_msp_dp_write(17, 0, buf, 0);
+
+            } else {
+                // No GPS lock — show placeholders
+                bf_msp_dp_write(16, 1, "NO GPS", 0);
+                bf_msp_dp_write(17, 1, "-------", 0);
+            }
+            break;
+        }
+
+
+        // -------------------------------------------------------
+        // Flight mode
+        // -------------------------------------------------------
+        case 8:
             bf_msp_dp_write(0, 10, "QLITE", 0);
             break;
 
         // -------------------------------------------------------
-        // Step 7 — Crosshair
+        // Crosshair
         // -------------------------------------------------------
-        case 7:
+        case 9:
                 if (_vtxType == VTX_WALKSNAIL) {
                     // Walksnail crosshair icon
                     bf_msp_dp_write(9, 25, "s", 0);
@@ -1186,9 +1392,9 @@ void bf_msp_dp_update_osd_nb() {
             break;
 
         // -------------------------------------------------------
-        // Step 8 — Commit frame
+        // Commit frame
         // -------------------------------------------------------
-        case 8:
+        case 10:
             bf_msp_dp_draw();
             break;
 
@@ -1202,7 +1408,6 @@ void bf_msp_dp_update_osd_nb() {
 
     _osdStep++;
 }
-
 
 // =======================================================
 // PUBLIC — bf_msp_set_armed()
