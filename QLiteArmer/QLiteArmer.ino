@@ -111,6 +111,10 @@ void setup1() {
     // MSP subsystem
     bf_msp_init(Serial1, telemetry, crsf);
 
+    delay(150);
+    // LED
+    ledInit();
+
     // GPS on Serial4 (UART4) using pins 14 (TX) and 15 (RX)
     static const uint32_t gpsBauds[] = {9600, 38400, 57600, 115200};
     //SerialGPS.begin(9600);  // or autodetect later
@@ -125,8 +129,6 @@ void setup1() {
         Serial.println("[GPS] WARNING: No GPS detected.");
     }
 
-    // LED
-    ledInit();
 
     // Start state machine
     enterState(STATE_BOOT_DETECT);

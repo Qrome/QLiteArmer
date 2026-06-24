@@ -1,23 +1,26 @@
 #include "led.h"
 #include "config.h"
-#include <NeoPixelBus.h>
 
-// Use the generic 800 Kbps method (no PIO)
-NeoPixelBus<NeoRgbFeature, Neo800KbpsMethod> rgb(LED_COUNT, LED_PIN);
+NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod>* rgb = nullptr;
 
 static bool flashState = false;
 static uint32_t lastFlash = 0;
 
 void ledInit() {
-    rgb.Begin();
-    //rgb.SetBrightness(40);
-    rgb.Show();
+    // Allocate dynamically AFTER system is stable
+    rgb = new NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod>(LED_COUNT, LED_PIN);
+
+    delay(50); // allow DMA/IRQ to settle
+    Serial.println("[LED] Calling LED Begin");
+    rgb->Begin();
+    rgb->Show();
+    Serial.println("[LED] Leaving ledInit()");
 }
 
 static inline void set(uint8_t r, uint8_t g, uint8_t b) {
-    RgbColor c(r, g, b);
-    rgb.SetPixelColor(0, c);
-    rgb.Show();
+    if (!rgb) return;
+    rgb->SetPixelColor(0, RgbColor(r, g, b));
+    rgb->Show();
 }
 
 void ledBlue()  { set(0,   0,   20); }
@@ -31,7 +34,7 @@ void ledAmberFlash() {
     if (now - lastFlash > 80) {
         lastFlash = now;
         flashState = !flashState;
-        if (flashState) set(255, 80, 0);
+        if (flashState) set(20, 10, 0);
         else set(0, 0, 0);
     }
 }
