@@ -10,7 +10,7 @@ It provides:
 - 8‑channel servo expansion  
 - Deterministic, non‑blocking architecture  
 
-QLiteArmer is **not** an auto‑arming module anymore — arming is now **strictly controlled by RC PWM Channel 5** for safety and predictability.
+QLiteArmer is **not** an auto‑arming module — arming is **strictly controlled by RC PWM Channel 5** for safety and predictability.
 
 ---
 
@@ -54,9 +54,7 @@ Arming is now **100% PWM‑based**:
 
 - Uses RC Channel 5 (default)
 - Arms when PWM > threshold (default: 1700 µs)
-- Disarms when PWM < threshold
-- No MSP‑based auto‑arming
-- No automatic arming transitions
+- Disarms when PWM < threshold  
 
 This ensures predictable, pilot‑controlled arming behavior.
 
