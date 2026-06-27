@@ -29,6 +29,9 @@ static const ChannelMap CH_MAP[8] = {
 #define PIN_CRSF_RX     9
 #define PIN_CRSF_TX     8
 
+#define PIN_GPS_TX      14
+#define PIN_GPS_RX      15
+
 #define PIN_I2C_SDA     4
 #define PIN_I2C_SCL     5
 

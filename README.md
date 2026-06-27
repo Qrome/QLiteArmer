@@ -1,14 +1,110 @@
-# QLiteArmer — FULL OSD with MSP‑Driven Arming Module with ELRS/CRSF Channel Breakout & Servo Expansion
+# QLiteArmer — Dual‑Core RP2040/RP2350 Telemetry Processor & Full MSP DisplayPort OSD
 
-**QLiteArmer** is a full OSD, on high‑reliability RP2040‑based module that automatically arms Walksnail Avatar HD, DJI O3/O4 HD video systems using MSP telemetry detection. It provides deterministic arming behavior, clean state‑machine architecture, PWM‑based arming control, and a built‑in servo expander.
+QLiteArmer is a high‑reliability, dual‑core RP2040/RP2350‑based telemetry and OSD engine designed for FPV pilots, RC builders, and embedded developers.  
+It provides:
 
-This project is designed for FPV pilots, RC builders, and embedded developers who want a robust, plug‑and‑play arming solution with professional‑grade signal handling.
+- Full Betaflight‑style OSD for DJI O3/O4 and Walksnail Avatar HD  
+- GPS + barometer telemetry processing  
+- CRSF/ELRS channel breakout  
+- PWM‑based arming (Channel 5)  
+- 8‑channel servo expansion  
+- Deterministic, non‑blocking architecture  
+
+QLiteArmer is **not** an auto‑arming module anymore — arming is now **strictly controlled by RC PWM Channel 5** for safety and predictability.
 
 ---
 
 ## ✨ Features
 
-### **Pin Map Summary**
+### **Full OSD Engine (MSP DisplayPort)**
+QLiteArmer includes a complete Betaflight‑compatible OSD renderer supporting:
+
+- Satellite count  
+- Pack voltage  
+- Vertical speed  
+- RC link quality (ELRS LQ)  
+- Distance from home  
+- Altitude  
+- Ground speed  
+- Total trip distance  
+- Latitude / longitude  
+- Home arrow (16‑direction)  
+- Crosshair  
+
+Compatible with:
+
+- **DJI O3 / O4 Air Unit**
+- **Walksnail Avatar HD (Goggles X / VTX)**
+
+Uses Betaflight character mappings and custom glyphs for home arrow rendering.
+
+---
+
+## 🖼 Betaflight-Compatible Character Map (Walksnail Avatar HD)
+
+This project includes a full custom character map matching Betaflight’s DisplayPort glyph layout, adapted for Walksnail Avatar HD.
+
+![Betaflight-Compatible Character Map (Walksnail Avatar HD)](images/first_column_ascii_map.png)
+
+---
+
+## 🎮 PWM‑Based Arming (Channel 5)
+
+Arming is now **100% PWM‑based**:
+
+- Uses RC Channel 5 (default)
+- Arms when PWM > threshold (default: 1700 µs)
+- Disarms when PWM < threshold
+- No MSP‑based auto‑arming
+- No automatic arming transitions
+
+This ensures predictable, pilot‑controlled arming behavior.
+
+---
+
+## 🛰 Telemetry System
+
+### **GPS Telemetry**
+- Autodetects baud rate  
+- Home position lock  
+- Distance from home  
+- Bearing to home  
+- Ground speed  
+- Course  
+- Latitude / longitude  
+- Total trip distance  
+- GPS fix + satellite count  
+
+### **Barometer (BMP280)**
+- Altitude (cm)  
+- Vertical speed (cm/s)  
+- Temperature (optional)  
+
+### **Battery Monitoring**
+- VBAT via ADC  
+- Configurable voltage divider  
+- Pack voltage displayed in OSD  
+
+### **Units**
+- Metric or Imperial (configurable)
+
+---
+
+## 🧩 Servo Expansion (8‑Channel PWM Output)
+
+QLiteArmer includes a hardware‑accurate servo expander:
+
+- 8 PWM outputs  
+- Per‑channel min/max mapping  
+- Per‑channel failsafe values  
+- Frequency‑matched output  
+- CRSF/ELRS channel passthrough  
+- Ultra‑stable RP2040 hardware PWM  
+
+---
+
+## ⚙ Pin Map
+
 | Function | Pin(s) | Notes |
 | --- | --- | --- |
 | **CRSF / ELRS UART** | GP8 (TX), GP9 (RX) | Primary RC link |
@@ -16,87 +112,147 @@ This project is designed for FPV pilots, RC builders, and embedded developers wh
 | **I²C (BMP280)** | GP4 (SDA), GP5 (SCL) | Barometer |
 | **VBAT ADC** | GP26 | Voltage divider |
 | **PWM CH1–CH8** | 13, 12, 11, 10, 7, 6, 3, 2 | Servo/motor outputs |
-| **RGB LED** | GP16 | Built in Indicator |
-| **GPS** | 3v3, Gnd, GP14 (TX), GP15 (RX) | 4 Wire GPS |
-
-### **MSP‑Driven VTx Arming**
-- Automatically detects Walksnail Avatar HD & DJI O3 or O4 Air Unit via MSP telemetry.
-- Fully non‑blocking MSP parser ensures reliable detection.
-- Supports MSP Display port OSD by emulating Betaflight OSD elements
-- RP2040 LED feedback for each state.
-
-### **Deterministic State Machine**
-- **BOOT_DETECT** → Wait for MSP heartbeat (blue)  
-- **PRE_ARM_DELAY** → Ready to arm with PWM‑based arming (red) 
-- **ARMED** → Active arming state (green)  
-- **ERROR** → Timeout or invalid MSP (amber)  
-- Designed for clarity, maintainability, and future expansion.
-
-#### **PWM‑Based Arming**
-- Reads a standard RC PWM channel 5 (1000–2000 µs).
-- Arms when PWM exceeds a configurable threshold.
-- Disarms when PWM drops below threshold.
-- Fully non‑blocking and jitter‑resistant.
-
-### **Servo Expander (PWM Input → Scaled PWM Output)**
-- Reads PWM input on **pin 7** from receiver (ELRS / CRSF).
-- Supports **50–500 Hz** input frequencies.
-- Measures pulse width and input period in real time.
-- Output frequency **matches the input frequency**.
-- Uses RP2040 **hardware PWM** for rock‑solid timing.
-- ISR is ultra‑lightweight and validated for ELRS PWM receivers.
-
-### **Non‑Blocking Architecture**
-- MSP parsing  
-- PWM arming  
-- Servo expansion  
-- LED updates
-- GPS Updating  
-- State machine transitions  
-
-This structure makes the firmware easy to extend, debug, and maintain.
+| **RGB LED** | GP16 | Onboard WS2812 |
+| **GPS** | GP14 (TX), GP15 (RX) | 4‑wire GPS |
 
 ---
 
-## 🧩 Hardware Requirements
+## 🛠 Hardware Overview
 
-- RP2040‑Zero or compatible RP2040 board  
-- DJI O3, O4 / Vista / Air Unit / Walksnail Avatar HD UART connection  
-- RC PWM receiver (ELRS PWM RX recommended)  
+### **QLiteArmer Custom PCB — Bare Board Available Soon**
+![QLiteArmer Custom PCB — Bare Board](images/QLiteArmer_board_00.png)
 
----
-
-## 🚀 How It Works
-
-1. **Boot**  
-   - LED turns blue  
-   - Module waits for MSP telemetry  
-
-2. **MSP Detected**  
-   - LED turns red  
-   - PRE_ARM_DELAY begins  
-
-3. **Arming Logic**
-   - LED turns green when armed  
-
-5. **Servo Expansion**  
-   - Continuously reads PWM input  
-   - Measures pulse width + frequency  
-   - Outputs scaled PWM on pin 29  
-   - Fully independent of arming logic  
+### **QLiteArmer Custom PCB — Fully Assembled**
+![QLiteArmer Custom PCB — Fully Assembled](images/QLiteArmer_board_01.png)
 
 ---
 
-## 🧪 Tested With
+## 🚀 How It Works (High‑Level)
 
-- ELRS PWM receivers (50–500 Hz)  
-- DJI O4 Air Unit MSP telemetry
-- Walksnail Avatar HD Goggles X
-- Servos and gimbal controllers  
-- RP2040‑Zero hardware  
+1. **Boot**
+   - System initializes dual‑core architecture  
+   - LED indicates boot state  
+
+2. **Telemetry Acquisition**
+   - Core 1 handles GPS, barometer, battery, and OSD  
+   - Core 0 handles CRSF/ELRS and PWM output  
+
+3. **OSD Rendering**
+   - MSP DisplayPort frames generated in real time  
+   - Betaflight‑compatible glyphs  
+   - Home arrow computed from GPS bearing  
+
+4. **Arming**
+   - PWM Channel 5 controls arming  
+   - No auto‑arming logic  
+
+5. **Servo Expansion**
+   - CRSF channels mapped to PWM outputs  
+   - Failsafe values applied on link loss  
+
+---
+
+## 🧠 System Architecture (Technical)
+
+### **Core 0 (Time‑Critical)**
+- CRSF/ELRS UART  
+- PWM output generation  
+- MSP heartbeat  
+- Channel mapping  
+- Failsafe handling  
+
+### **Core 1 (Telemetry + OSD)**
+- MSP DisplayPort  
+- GPS parsing  
+- Barometer updates  
+- Battery ADC  
+- OSD composition  
+- State machine  
+- LED driver  
+
+### **SerialPIO Notes**
+- SerialPIO is used for GPS  
+- Requires careful initialization order  
+- LED must use `NeoWs2812xMethod` (no DMA)  
+- LED initialization must occur after SerialPIO  
+
+### **RP2040 vs RP2350**
+- Both fully supported  
+- LED color order differs between boards  
+- Auto‑detected via compile‑time selection  
+
+---
+
+## 🔧 Configuration Reference
+
+### **PWM Channel Mapping**
+Each channel has:
+- `minUs`
+- `maxUs`
+- `failsafeUs`
+
+Example (from config.h):
+```
+static const ChannelMap CH_MAP[8] = {
+    {988, 2012, 1500},   // CH1
+    {988, 2012, 1500},   // CH2
+    {988, 2012, 1000},   // CH3 (Throttle failsafe = 1000)
+    {988, 2012, 1500},   // CH4 
+    {988, 2012, 1500},   // CH5
+    {500, 2500, 1500},   // CH6 (expanded range)
+    {988, 2012, 1500},   // CH7
+    {988, 2012, 1500}    // CH8
+};
+```
+
+### **Arming Settings**
+- `PWM_ARM_CHANNEL = 4` (Channel 5)  
+- `PWM_ARM_THRESHOLD = 1700`  
+- `PWM_NO_SIGNAL_US = 900`  
+
+### **Battery Divider**
+Default:
+- R1 = 30k  
+- R2 = 7.5k  
+
+### **Telemetry Rates**
+- Battery: 5 Hz  
+- Altitude: 5 Hz  
+
+### **Units**
+- Metric or Imperial  
+
+### **Timing**
+- VTX detection timeout: 5 minutes  
+- Pre‑arm delay: 30 seconds  
+- Heartbeat: 200 ms  
+
+### **LED**
+- LED pin: GP16  
+- LED count: 1  
+- RP2040/RP2350 color order handled internally  
+
+### **Home Arrow Glyph Table**
+Rows 96–111  
+16 directions  
+22.5° increments  
+CCW orientation  
+
+---
+
+## 🧪 Tested Hardware
+
+- RP2040‑Zero  
+- RP2350 boards  
+- DJI O3 / O4 Air Unit  
+- Walksnail Avatar HD  
+- ELRS receivers  
+- BMP280 barometer  
+- Standard GPS modules  
 
 ---
 
 ## 📄 License
 
-MIT License — feel free to modify, extend, and integrate into your own builds.
+MIT License — free to modify, extend, and integrate.
+

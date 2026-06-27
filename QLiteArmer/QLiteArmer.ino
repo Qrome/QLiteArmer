@@ -22,7 +22,7 @@ bool distFiltInit = false;
 CrossfireELRS crsf;
 PWMDriver pwm;
 Telemetry telemetry;
-SerialPIO SerialGPS(14, 15); //TX=14, RX=15
+SerialPIO SerialGPS(PIN_GPS_TX, PIN_GPS_RX); 
 GPS gps;
 
 // Shared across cores — volatile for safety
