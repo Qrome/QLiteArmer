@@ -1,6 +1,6 @@
 # QLiteArmer — Dual‑Core RP2040/RP2350 Telemetry Processor & Full MSP DisplayPort OSD
 
-QLiteArmer is a high‑reliability, dual‑core RP2040/RP2350‑based telemetry and OSD engine designed for FPV pilots, RC builders, and embedded developers.  
+QLiteArmer is a high‑reliability, dual‑core RP2040‑based telemetry and OSD engine designed for FPV pilots, RC builders, and embedded developers.  
 It provides:
 
 - Full Betaflight‑style OSD for DJI O3/O4 and Walksnail Avatar HD  
@@ -63,12 +63,11 @@ This ensures predictable, pilot‑controlled arming behavior.
 ## 🛰 Telemetry System
 
 ### **GPS Telemetry**
-- Autodetects baud rate  
+- Autodetects baud rate  (9600, 38400, 57600, 115200)
 - Home position lock  
 - Distance from home  
 - Bearing to home  
 - Ground speed  
-- Course  
 - Latitude / longitude  
 - Total trip distance  
 - GPS fix + satellite count  
@@ -76,7 +75,6 @@ This ensures predictable, pilot‑controlled arming behavior.
 ### **Barometer (BMP280)**
 - Altitude (cm)  
 - Vertical speed (cm/s)  
-- Temperature (optional)  
 
 ### **Battery Monitoring**
 - VBAT via ADC  
@@ -122,6 +120,59 @@ QLiteArmer includes a hardware‑accurate servo expander:
 
 ### **QLiteArmer Custom PCB — Fully Assembled**
 ![QLiteArmer Custom PCB — Fully Assembled](images/QLiteArmer_board_01.png)
+
+## 🧰 Parts List (with Affiliate Links)
+
+These are the recommended components for building a complete QLiteArmer module.  
+All links are affiliate links that help support the project at no additional cost.
+
+### **Core Components**
+- **QLiteAmer PCB Board by Qrome**  
+  (Link Provided soon)
+
+- **RP2040‑Zero**  
+  https://amzn.to/4v0oCKq
+
+- **BN‑220 GPS Module (9600 bps)**  
+  https://amzn.to/4eTLu8G
+
+- **HGLRC ExpressLRS 915 MHz Receiver**  
+  https://amzn.to/4w56T5E
+
+- **BMP280‑3.3 Atmospheric Pressure Sensor**  
+  https://amzn.to/44y8Onq
+
+### **Power & Regulation**
+- **3A Mini DC‑DC Buck Converter (5.5–30 V → 5 V)**  
+  https://amzn.to/4wcNi3h
+
+### **Passive Components**
+- **30 kΩ Resistor (¼ W)**  
+  https://amzn.to/3StSnWB
+
+- **7.5 kΩ Resistor (¼ W)**  
+  https://amzn.to/440p8Nx
+
+- **0.1 µF (100 nF) Ceramic Capacitors (104)**  
+  https://amzn.to/4xO8TAQ
+
+- **1000 µF 25 V Electrolytic Capacitor (optional)**  
+  https://amzn.to/4vtyai8
+
+### **Headers & Connectors**
+- **Pin Header, 2.54mm 40Pin Male and Female Header Pins**  
+  https://amzn.to/4oQfh6B
+
+### **Other Recommended Items**
+- **RADIOMASTER TX15 Max**  
+  https://amzn.to/4vCAtQa
+
+- **Walksnail Avatar HD FPV Goggles X**  
+  https://amzn.to/4f2cXWN
+
+- **Walksnail Avatar GT2 Kit – Air Unit**  
+  https://amzn.to/4geaycN
+
 
 ---
 
@@ -171,8 +222,7 @@ QLiteArmer includes a hardware‑accurate servo expander:
 ### **SerialPIO Notes**
 - SerialPIO is used for GPS  
 - Requires careful initialization order  
-- LED must use `NeoWs2812xMethod` (no DMA)  
-- LED initialization must occur after SerialPIO  
+- LED initialization must occur before SerialPIO  
 
 ### **RP2040 vs RP2350**
 - Both fully supported  
@@ -204,7 +254,7 @@ static const ChannelMap CH_MAP[8] = {
 ```
 
 ### **Arming Settings**
-- `PWM_ARM_CHANNEL = 4` (Channel 5)  
+- `PWM_ARM_CHANNEL = 4` (Channel 5 -- ZERO based mapping)  
 - `PWM_ARM_THRESHOLD = 1700`  
 - `PWM_NO_SIGNAL_US = 900`  
 
@@ -222,7 +272,6 @@ Default:
 
 ### **Timing**
 - VTX detection timeout: 5 minutes  
-- Pre‑arm delay: 30 seconds  
 - Heartbeat: 200 ms  
 
 ### **LED**
@@ -241,7 +290,7 @@ CCW orientation
 ## 🧪 Tested Hardware
 
 - RP2040‑Zero  
-- RP2350 boards  
+- RP2350-Zero  
 - DJI O3 / O4 Air Unit  
 - Walksnail Avatar HD  
 - ELRS receivers  
