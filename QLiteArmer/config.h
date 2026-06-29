@@ -16,7 +16,7 @@ static const ChannelMap CH_MAP[8] = {
     {988, 2012, 1500},   // CH1
     {988, 2012, 1500},   // CH2
     {988, 2012, 1000},   // CH3 (Throttle failsafe = 1000)
-    {988, 2012, 1500},   // CH4 
+    {500, 2500, 1500},   // CH4 
     {988, 2012, 1500},   // CH5
     {500, 2500, 1500},   // CH6 (expanded range)
     {988, 2012, 1500},   // CH7
@@ -87,19 +87,20 @@ static const uint8_t LED_COUNT = 1;
 // 16‑direction home arrow glyphs (rows 96–111), CCW, 22.5° per step
 static const uint8_t arrowRows[16] = {
     96,  //   0° DOWN
-    97,  //  22.5° DOWN‑LEFT
-    98,  //  45° DOWN‑LEFT
-    99,  //  67.5° DOWN‑LEFT
-    100, //  90° LEFT
-    101, // 112.5° UP‑LEFT
-    102, // 135° UP‑LEFT
-    103, // 157.5° UP‑LEFT
+    97,  //  22.5° DOWN‑SLIGHT-RIGHT
+    98,  //  45° RIGHT‑DOWN
+    99,  //  67.5° RIGHT‑SLIGHT-UP
+    100, //  90° RIGHT
+    101, // 112.5° RIGHT‑UP
+    102, // 135° UP‑RIGHT
+    103, // 157.5° UP‑SLIGHT-RIGHT
     104, // 180° UP
-    105, // 202.5° UP‑RIGHT
-    106, // 225° UP‑RIGHT
-    107, // 247.5° UP‑RIGHT
-    108, // 270° RIGHT
-    109, // 292.5° DOWN‑RIGHT
-    110, // 315° DOWN‑RIGHT
-    111  // 337.5° DOWN‑RIGHT
+    105, // 202.5° UP‑LEFT
+    106, // 225° LEFT‑UP
+    107, // 247.5° LEFT‑SLIGHT-UP
+    108, // 270° LEFT
+    109, // 292.5° LEFT‑DOWN
+    110, // 315° DOWN‑LEFT
+    111  // 337.5° DOWN‑SLIGHT-LEFT
 };
+

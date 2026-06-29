@@ -28,6 +28,7 @@ GPS gps;
 // Shared across cores — volatile for safety
 volatile bool systemReady = false;
 volatile bool loopReady = false;
+volatile bool gpsReady = false;
 
 inline void debugPrint(const String &msg) {
     if (Serial) {
@@ -115,9 +116,8 @@ void setup1() {
     // LED
     ledInit();
 
-    // GPS on Serial4 (UART4) using pins 14 (TX) and 15 (RX)
-    static const uint32_t gpsBauds[] = {9600, 38400, 57600, 115200};
-    //SerialGPS.begin(9600);  // or autodetect later
+    // GPS on SerialPIO using pins 14 (TX) and 15 (RX)
+    static const uint32_t gpsBauds[] = {115200, 9600, 38400, 57600};
     gps.begin(SerialGPS);
 
     Serial.println("[GPS] Starting autodetect...");
@@ -128,7 +128,6 @@ void setup1() {
     } else {
         Serial.println("[GPS] WARNING: No GPS detected.");
     }
-
 
     // Start state machine
     enterState(STATE_BOOT_DETECT);
@@ -175,50 +174,8 @@ void loop1() {
     sharedTelem.batteryMv = telemetry.readBatteryMv();
 
     // Start tracking only when GPS fix + 6 sats and armed
-    bool gpsLocked = (sharedTelem.gpsFix && sharedTelem.gpsSats >= 6);
-
-    // Only track when ARMED + GPS locked
-    if (currentState == STATE_ARMED && gpsLocked) {
-
-        if (!sharedTelem.gpsTotalActive) {
-            // First valid point after arming
-            sharedTelem.gpsPrevLatDeg = sharedTelem.gpsLatDeg;
-            sharedTelem.gpsPrevLonDeg = sharedTelem.gpsLonDeg;
-            sharedTelem.gpsPrevValid = true;
-            sharedTelem.gpsTotalActive = true;
-        }
-
-        if (sharedTelem.gpsPrevValid) {
-            // Haversine incremental distance
-            float lat1 = radians(sharedTelem.gpsPrevLatDeg);
-            float lon1 = radians(sharedTelem.gpsPrevLonDeg);
-            float lat2 = radians(sharedTelem.gpsLatDeg);
-            float lon2 = radians(sharedTelem.gpsLonDeg);
-
-            float dLat = lat2 - lat1;
-            float dLon = lon2 - lon1;
-
-            float a = sin(dLat/2)*sin(dLat/2) +
-                    cos(lat1)*cos(lat2)*sin(dLon/2)*sin(dLon/2);
-
-            float c = 2 * atan2(sqrt(a), sqrt(1-a));
-
-            const float R = 6371000.0f; // meters
-            float deltaM = R * c;
-
-            // Reject GPS jumps > 100m
-            if (deltaM < 100.0f)
-                sharedTelem.gpsTotalDistM += deltaM;
-        }
-
-        // Update previous
-        sharedTelem.gpsPrevLatDeg = sharedTelem.gpsLatDeg;
-        sharedTelem.gpsPrevLonDeg = sharedTelem.gpsLonDeg;
-        sharedTelem.gpsPrevValid = true;
-
-    } else {
-        // Not tracking
-        sharedTelem.gpsPrevValid = false;
+    if (!gpsReady && sharedTelem.gpsFix && sharedTelem.gpsSats >= 6) {
+        gpsReady = true;
     }
 
 
@@ -247,11 +204,56 @@ void loop1() {
     uint16_t armRaw = crsf.getChannel(PWM_ARM_CHANNEL);
     stateMachineUpdate(armRaw, crsf.crsfLinkActive);
     // --- Detect ARM transition using state machine ---
-    if (currentState == STATE_ARMED && lastState != STATE_ARMED) {
+    if (currentState == STATE_ARMED && lastState != STATE_ARMED && gpsReady) {
         // Rising edge: system just became ARMED
         gps.forceSetHome();
         sharedTelem.gpsTotalDistM = 0.0f;
         sharedTelem.gpsTotalActive = false;
+        sharedTelem.gpsPrevValid = false;
+    }
+
+    // Only track when ARMED + GPS locked
+    if (currentState == STATE_ARMED && gpsReady) {
+
+        if (!sharedTelem.gpsTotalActive) {
+            // First valid point after arming
+            sharedTelem.gpsPrevLatDeg = sharedTelem.gpsLatDeg;
+            sharedTelem.gpsPrevLonDeg = sharedTelem.gpsLonDeg;
+            sharedTelem.gpsPrevValid = true;
+            sharedTelem.gpsTotalActive = true;
+        }
+
+        if (sharedTelem.gpsPrevValid) {
+            // Haversine incremental distance
+            float lat1 = radians(sharedTelem.gpsPrevLatDeg);
+            float lon1 = radians(sharedTelem.gpsPrevLonDeg);
+            float lat2 = radians(sharedTelem.gpsLatDeg);
+            float lon2 = radians(sharedTelem.gpsLonDeg);
+
+            float dLat = lat2 - lat1;
+            float dLon = lon2 - lon1;
+
+            float a = sin(dLat/2)*sin(dLat/2) +
+                    cos(lat1)*cos(lat2)*sin(dLon/2)*sin(dLon/2);
+
+            float c = 2 * atan2(sqrt(a), sqrt(1-a));
+
+            const float R = 6371000.0f; // meters
+            float deltaM = R * c;
+
+            // Reject GPS jumps > 100m
+            float maxJump = sharedTelem.gpsGroundSpeedCms * 0.05f; // 50ms window
+            if (deltaM < maxJump)
+                sharedTelem.gpsTotalDistM += deltaM;
+        }
+
+        // Update previous
+        sharedTelem.gpsPrevLatDeg = sharedTelem.gpsLatDeg;
+        sharedTelem.gpsPrevLonDeg = sharedTelem.gpsLonDeg;
+        sharedTelem.gpsPrevValid = true;
+
+    } else {
+        // Not tracking
         sharedTelem.gpsPrevValid = false;
     }
 

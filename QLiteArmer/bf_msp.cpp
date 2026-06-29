@@ -975,20 +975,11 @@ void bf_msp_heartbeat_update(bool armed) {
     _heartbeatStep++;
 }
 
-// Convert angle → 0–15 arrow index (CCW, 22.5° steps)
-static inline uint8_t getArrowIndex(float angleDeg)
-{
-    while (angleDeg < 0) angleDeg += 360.0f;
-    while (angleDeg >= 360) angleDeg -= 360.0f;
-    return (uint8_t)((angleDeg + 11.25f) / 22.5f) & 0x0F;
-}
-
 // Convert row number → glyph character
 static inline char glyphFromRow(uint8_t row)
 {
     return (char)row;
 }
-
 
 // =======================================================
 // PUBLIC — bf_msp_dp_update_osd_nb()
@@ -1223,21 +1214,45 @@ void bf_msp_dp_update_osd_nb() {
         #endif
 
             bf_msp_dp_write(0, 35, dbuf, 0);
+            break;
+        }
+        // -------------------------------------------------------
+        // Home-direction arrow (SharedTelemetry version)
+        // -------------------------------------------------------
+        case 6: {
+            if (sharedTelem.gpsTotalActive) {
 
-            // -------------------------------------------------------
-            // Home-direction arrow (SharedTelemetry version)
-            // -------------------------------------------------------
-            if (sharedTelem.gpsFix) {
+                // 1. Get bearing from aircraft → home (Earth reference)
+                float bearingToHome = sharedTelem.gpsBearingToHomeDeg;
 
-                float angle = sharedTelem.gpsBearingToHomeDeg;
-                uint8_t idx = getArrowIndex(angle);
+                // 2. Get aircraft heading (Earth reference)
+                float aircraftHeading = sharedTelem.gpsCourseDeg;
 
+                // 3. Convert to pilot-relative direction
+                float rel = bearingToHome - aircraftHeading;
+                if (rel < 0) rel += 360.0f;
+
+                // 4. Rotate for Betaflight's DOWN = 0° orientation
+                float bfBearing = rel + 180.0f;
+                if (bfBearing >= 360.0f) bfBearing -= 360.0f;
+
+                // 5. Convert to glyph index (CLOCKWISE)
+                uint8_t idx = (uint8_t)((bfBearing + 11.25f) / 22.5f) & 0x0F;
+
+                // 6. Fetch glyph
                 char arrowGlyph = glyphFromRow(arrowRows[idx]);
                 char abuf[2] = { arrowGlyph, 0 };
 
+                // 7. Draw arrow
                 bf_msp_dp_write(8, 25, abuf, 0);
             }
+            break;
+        }
 
+        // -------------------------------------------------------
+        // GPS Number of Satallites
+        // -------------------------------------------------------
+        case 7: {
             // Number of Satallites
             uint8_t sats = sharedTelem.gpsSats;
 
@@ -1252,11 +1267,12 @@ void bf_msp_dp_update_osd_nb() {
                 snprintf(buf, sizeof(buf), "%2u%c%c", sats, 30, 31);
                 bf_msp_dp_write(0, 3, buf, 0);
             }
-
-
-            // -------------------------------------------------------
-            // GPS Ground Speed (mph or kph, clamped to 3 digits)
-            // -------------------------------------------------------
+            break;
+        }
+        // -------------------------------------------------------
+        // GPS Ground Speed (mph or kph, clamped to 3 digits)
+        // -------------------------------------------------------
+        case 8: {
             float gsCms = sharedTelem.gpsGroundSpeedCms;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1285,10 +1301,12 @@ void bf_msp_dp_update_osd_nb() {
             #endif
 
             bf_msp_dp_write(2, 35, buf, 0);
-            
-            // -------------------------------------------------------
-            // Total Distance Traveled
-            // -------------------------------------------------------
+            break;
+        }
+        // -------------------------------------------------------
+        // Total Distance Traveled
+        // -------------------------------------------------------
+        case 9: {
             float totalM = sharedTelem.gpsTotalDistM;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1326,7 +1344,6 @@ void bf_msp_dp_update_osd_nb() {
 
             // Display at (3, 35) — adjust if needed
             bf_msp_dp_write(17, 36, buf, 0);
-
             break;
         }
 
@@ -1334,7 +1351,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Arm state
         // -------------------------------------------------------
-        case 6:
+        case 10:
             if (armed) {
                 bf_msp_dp_write(17, 22, "   ARMED   ", 0);
             } else {
@@ -1345,7 +1362,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Step 7 — Latitude & Longitude
         // -------------------------------------------------------
-        case 7: {
+        case 11: {
             if (sharedTelem.gpsFix) {
 
                 // Format: ±XX.XXXXXX
@@ -1371,14 +1388,14 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Flight mode
         // -------------------------------------------------------
-        case 8:
+        case 12:
             bf_msp_dp_write(0, 10, "QLITE", 0);
             break;
 
         // -------------------------------------------------------
         // Crosshair
         // -------------------------------------------------------
-        case 9:
+        case 13:
                 if (_vtxType == VTX_WALKSNAIL) {
                     // Walksnail crosshair icon
                     bf_msp_dp_write(9, 25, "s", 0);
@@ -1394,7 +1411,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Commit frame
         // -------------------------------------------------------
-        case 10:
+        case 14:
             bf_msp_dp_draw();
             break;
 

@@ -1,3 +1,4 @@
+#include "SerialPIO.h"
 #include "config.h"
 #include "led.h"
 #include "state_machine.h"
@@ -14,13 +15,14 @@ void enterState(SystemState s) {
     currentState = s;
     stateStart   = millis();
 
+    Serial.print("State Changed to: ");
+    Serial.println(currentState);
     switch (s) {
         case STATE_BOOT_DETECT:   ledBlue();  break;
         case STATE_PRE_ARM_DELAY: ledRed();   break;
         case STATE_ARMED:         ledGreen(); break;
         case STATE_ERROR:         ledOff();   break;
     }
-    Serial.println(s);
 }
 
 // ---------------------------------------------------------

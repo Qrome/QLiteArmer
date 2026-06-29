@@ -426,4 +426,3 @@ float GPS::getBearingToHomeDeg() const
     return bearing;
 }
 
-
