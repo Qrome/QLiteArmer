@@ -117,11 +117,11 @@ void setup1() {
     ledInit();
 
     // GPS on SerialPIO using pins 14 (TX) and 15 (RX)
-    static const uint32_t gpsBauds[] = {115200, 9600, 38400, 57600};
+    static const uint32_t gpsBauds[] = {9600, 38400, 57600, 115200};
     gps.begin(SerialGPS);
 
     Serial.println("[GPS] Starting autodetect...");
-    bool gpsOK = gps.autodetectBaud(gpsBauds, 4, 1000);
+    bool gpsOK = gps.autodetectBaud(gpsBauds, 4, 900);
 
     if (gpsOK) {
         Serial.println("[GPS] Autodetect successful.");

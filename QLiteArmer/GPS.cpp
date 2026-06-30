@@ -45,6 +45,7 @@ bool GPS::autodetectBaud(const uint32_t *baudList, size_t baudCount,
         Serial.println(baud);
 
         _port->begin(baud);
+        delay(100);
         resetState();
 
         uint32_t start = millis();
@@ -60,6 +61,10 @@ bool GPS::autodetectBaud(const uint32_t *baudList, size_t baudCount,
                 }
             }
         }
+        
+        // Tear down completely the the PIO instance
+        _port->end();
+        delay(50);
     }
     return false;
 }
