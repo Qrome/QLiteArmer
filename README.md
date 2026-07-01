@@ -1,4 +1,4 @@
-# QLiteArmer — Dual‑Core RP2040/RP2350 Telemetry Processor & Full MSP DisplayPort OSD
+# QLiteArmer — HD Armer and Full OSD with Dual‑Core RP2040 Telemetry MSP DisplayPort Processor
 
 QLiteArmer is a high‑reliability, dual‑core RP2040‑based telemetry and OSD engine designed for FPV pilots, RC builders, and embedded developers.  
 It provides:
@@ -133,8 +133,8 @@ All links are affiliate links that help support the project at no additional cos
 - **RP2040‑Zero**  
   https://amzn.to/4v0oCKq
 
-- **BN‑220 GPS Module (9600 bps)**  
-  https://amzn.to/4eTLu8G
+- **M100-5883 GPS (115200 bps 5Hz - 10Hz)**  
+  https://amzn.to/4weRRKt
 
 - **HGLRC ExpressLRS 915 MHz Receiver**  
   https://amzn.to/4w56T5E
