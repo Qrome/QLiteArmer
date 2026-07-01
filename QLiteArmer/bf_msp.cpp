@@ -1218,36 +1218,68 @@ void bf_msp_dp_update_osd_nb() {
         }
         // -------------------------------------------------------
         // Home-direction arrow (SharedTelemetry version)
+        // With sticky-bearing and heading validity protection
         // -------------------------------------------------------
         case 6: {
             if (sharedTelem.gpsTotalActive) {
 
-                // 1. Get bearing from aircraft → home (Earth reference)
+                // --- Sticky bearing state ---
+                static float lastMovingBearingToHome = 0.0f;
+                static bool wasMoving = false;
+
+                // 1. Bearing from aircraft → home (Earth reference)
                 float bearingToHome = sharedTelem.gpsBearingToHomeDeg;
 
-                // 2. Get aircraft heading (Earth reference)
+                // 2. Aircraft heading (Earth reference)
                 float aircraftHeading = sharedTelem.gpsCourseDeg;
 
-                // 3. Convert to pilot-relative direction
+                // 3. Detect motion using ground speed (cm/s → m/s)
+                float speedMs = sharedTelem.gpsGroundSpeedCms * 0.01f;
+
+                // GPS heading becomes unreliable below ~0.5 m/s
+                bool moving = speedMs > 0.5f;
+
+                // Additional protection:
+                // If heading is invalid (0 or 360), treat as not moving
+                if (aircraftHeading <= 0.1f || aircraftHeading >= 359.9f) {
+                    moving = false;
+                }
+
+                if (moving) {
+                    // Craft is moving → use live bearing
+                    lastMovingBearingToHome = bearingToHome;
+                    wasMoving = true;
+                } else {
+                    // Craft is NOT moving → freeze bearing at last moving value
+                    if (wasMoving) {
+                        bearingToHome = lastMovingBearingToHome;
+                    }
+                    wasMoving = false;
+                }
+
+                // 4. Convert to pilot-relative direction
                 float rel = bearingToHome - aircraftHeading;
                 if (rel < 0) rel += 360.0f;
 
-                // 4. Rotate for Betaflight's DOWN = 0° orientation
+                // 5. Rotate for Betaflight's DOWN = 0° orientation
                 float bfBearing = rel + 180.0f;
                 if (bfBearing >= 360.0f) bfBearing -= 360.0f;
 
-                // 5. Convert to glyph index (CLOCKWISE)
+                // 6. Convert to glyph index (CLOCKWISE)
                 uint8_t idx = (uint8_t)((bfBearing + 11.25f) / 22.5f) & 0x0F;
 
-                // 6. Fetch glyph
+                // 7. Fetch glyph
                 char arrowGlyph = glyphFromRow(arrowRows[idx]);
                 char abuf[2] = { arrowGlyph, 0 };
 
-                // 7. Draw arrow
+                // 8. Draw arrow
                 bf_msp_dp_write(8, 25, abuf, 0);
             }
             break;
         }
+
+
+
 
         // -------------------------------------------------------
         // GPS Number of Satallites
