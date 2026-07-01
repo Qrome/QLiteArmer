@@ -158,6 +158,13 @@ static bool _dpReleased = false;
 // VTX type — declared in bf_msp.h, used here as module variable
 static VtxSystemType _vtxType = VTX_UNKNOWN;
 
+// Radar smoothing state
+static float radarBearingSmooth = 0.0f;
+static float radarRadiusSmooth = 0.0f;
+static int lastRowH = 0;
+static int lastColH = 0;
+
+
 // -------------------------------------------------------
 // Timing constants
 // -------------------------------------------------------
@@ -1243,10 +1250,94 @@ void bf_msp_dp_update_osd_nb() {
             break;
         }
         // -------------------------------------------------------
+        // Smooth Radar-style Home Indicator (5x5 grid, 200 ft per cell)
+        // Centered on crosshair at (9, 25)
+        // -------------------------------------------------------
+        case 6: {
+
+            if (!USE_RADAR_HOME_INDICATOR) break;
+            if (!sharedTelem.gpsTotalActive) break;
+
+            // --- Sticky bearing state ---
+            static float lastMovingBearingToHome = 0.0f;
+            static bool wasMoving = false;
+
+            // 1. Bearing from aircraft → home (Earth reference)
+            float bearingToHome = sharedTelem.gpsBearingToHomeDeg;
+
+            // 2. Aircraft heading (Earth reference)
+            float aircraftHeading = sharedTelem.gpsCourseDeg;
+
+            // 3. Detect motion using ground speed (cm/s → m/s)
+            float speedMs = sharedTelem.gpsGroundSpeedCms * 0.01f;
+            bool moving = speedMs > 0.5f;
+
+            // Heading invalid → treat as not moving
+            if (aircraftHeading <= 0.1f || aircraftHeading >= 359.9f) {
+                moving = false;
+            }
+
+            if (moving) {
+                lastMovingBearingToHome = bearingToHome;
+                wasMoving = true;
+            } else {
+                if (wasMoving) {
+                    bearingToHome = lastMovingBearingToHome;
+                }
+                wasMoving = false;
+            }
+
+            // 4. Compute relative bearing (pilot-relative)
+            float rel = bearingToHome - aircraftHeading;
+            if (rel < 0) rel += 360.0f;
+
+            // --- Smooth the bearing ---
+            radarBearingSmooth = radarBearingSmooth * 0.90f + rel * 0.10f;
+
+            float theta = radians(radarBearingSmooth);
+
+            // 5. Distance scaling (200 ft per cell)
+            float distFt = sharedTelem.gpsDistHomeM * 3.28084f;
+            float rawRadius = distFt / RADAR_CELL_FEET;  // 200 ft per cell
+
+            // Cap radius to 2 cells (5x5 grid)
+            if (rawRadius > 2.0f) rawRadius = 2.0f;
+
+            // --- Smooth the radius ---
+            radarRadiusSmooth = radarRadiusSmooth * 0.85f + rawRadius * 0.15f;
+
+            // 6. Convert bearing to grid offsets
+            float rowOffset = -sin(theta) * radarRadiusSmooth;
+            float colOffset =  cos(theta) * radarRadiusSmooth;
+
+            int rowC = 9;   // crosshair row
+            int colC = 25;  // crosshair col
+
+            int newRowH = rowC + (int)round(rowOffset);
+            int newColH = colC + (int)round(colOffset);
+
+            // --- Cell hysteresis: prevent rapid flipping ---
+            if (abs(newRowH - lastRowH) <= 1 && abs(newColH - lastColH) <= 1) {
+                // Small movement → keep old position
+                newRowH = lastRowH;
+                newColH = lastColH;
+            }
+
+            lastRowH = newRowH;
+            lastColH = newColH;
+
+            // 7. Draw the Home marker
+            bf_msp_dp_write(newRowH, newColH, "H", 0);
+
+            break;
+        }
+
+
+        // -------------------------------------------------------
         // Home-direction arrow (SharedTelemetry version)
         // With sticky-bearing and heading validity protection
         // -------------------------------------------------------
-        case 6: {
+        case 7: {
             if (sharedTelem.gpsTotalActive) {
 
                 // --- Sticky bearing state ---
@@ -1299,16 +1390,16 @@ void bf_msp_dp_update_osd_nb() {
                 char abuf[2] = { arrowGlyph, 0 };
 
                 // 8. Draw arrow
-                bf_msp_dp_write(8, 25, abuf, 0);
+                bf_msp_dp_write(1, 25, abuf, 0);
             }
             break;
         }
 
 
         // -------------------------------------------------------
-        // Flight Timer (H:MM:SS) — displayed left of total distance
+        // Flight Timer (MM:SS)
         // -------------------------------------------------------
-        case 7: {
+        case 8: {
             char tbuf[12];
 
             // Format the timer (frozen when disarmed)
@@ -1324,7 +1415,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // GPS Number of Satallites
         // -------------------------------------------------------
-        case 8: {
+        case 9: {
             // Number of Satallites
             uint8_t sats = sharedTelem.gpsSats;
 
@@ -1344,7 +1435,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // GPS Ground Speed (mph or kph, clamped to 3 digits)
         // -------------------------------------------------------
-        case 9: {
+        case 10: {
             float gsCms = sharedTelem.gpsGroundSpeedCms;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1378,7 +1469,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Total Distance Traveled
         // -------------------------------------------------------
-        case 10: {
+        case 11: {
             float totalM = sharedTelem.gpsTotalDistM;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1423,7 +1514,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Arm state
         // -------------------------------------------------------
-        case 11:
+        case 12:
             if (armed) {
                 bf_msp_dp_write(17, 22, "   ARMED   ", 0);
             } else {
@@ -1434,7 +1525,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Step 7 — Latitude & Longitude
         // -------------------------------------------------------
-        case 12: {
+        case 13: {
             if (sharedTelem.gpsFix) {
 
                 // Format: ±XX.XXXXXX
@@ -1460,14 +1551,14 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Flight mode
         // -------------------------------------------------------
-        case 13:
+        case 14:
             bf_msp_dp_write(0, 10, "QLITE", 0);
             break;
 
         // -------------------------------------------------------
         // Crosshair
         // -------------------------------------------------------
-        case 14:
+        case 15:
                 if (_vtxType == VTX_WALKSNAIL) {
                     // Walksnail crosshair icon
                     bf_msp_dp_write(9, 25, "s", 0);
@@ -1483,7 +1574,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Commit frame
         // -------------------------------------------------------
-        case 15:
+        case 16:
             bf_msp_dp_draw();
             break;
 
