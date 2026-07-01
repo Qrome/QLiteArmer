@@ -22,6 +22,11 @@ struct SharedTelemetry {
     float baroVSpeedCms = 0.0f;
 
     uint16_t batteryMv = 0;
+
+    uint32_t flightStartMs = 0;
+    uint32_t flightElapsedMs = 0;
+    bool flightTimerRunning = false;
+
 };
 
 extern SharedTelemetry sharedTelem;

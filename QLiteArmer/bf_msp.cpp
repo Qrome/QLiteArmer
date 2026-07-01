@@ -941,6 +941,21 @@ void bf_msp_heartbeat_update(bool armed) {
 
     _isArmed = armed;
 
+    // Update flight timer
+    if (_isArmed) {
+        if (!sharedTelem.flightTimerRunning) {
+            sharedTelem.flightTimerRunning = true;
+            sharedTelem.flightStartMs = millis();
+            sharedTelem.flightElapsedMs = 0;
+        } else {
+            sharedTelem.flightElapsedMs = millis() - sharedTelem.flightStartMs;
+        }
+    } else {
+        sharedTelem.flightTimerRunning = false;
+        // flightElapsedMs stays frozen
+    }
+
+
     uint32_t now = millis();
     if (now - _lastHeartbeatMs < MSP_FRAME_GAP_MS) return;
     _lastHeartbeatMs = now;
@@ -980,6 +995,17 @@ static inline char glyphFromRow(uint8_t row)
 {
     return (char)row;
 }
+
+
+static void formatFlightTime(char* buf, uint32_t elapsedMs) {
+    uint32_t totalSec = elapsedMs / 1000;
+    uint32_t minutes = (totalSec % 3600) / 60;
+    uint32_t seconds = totalSec % 60;
+
+    // Format H:MM:SS
+    sprintf(buf, "%02u:%02u", minutes, seconds);
+}
+
 
 // =======================================================
 // PUBLIC — bf_msp_dp_update_osd_nb()
@@ -1279,12 +1305,26 @@ void bf_msp_dp_update_osd_nb() {
         }
 
 
+        // -------------------------------------------------------
+        // Flight Timer (H:MM:SS) — displayed left of total distance
+        // -------------------------------------------------------
+        case 7: {
+            char tbuf[12];
+
+            // Format the timer (frozen when disarmed)
+            formatFlightTime(tbuf, sharedTelem.flightElapsedMs);
+
+            // Draw timer at row 10, col 20 (adjust as needed)
+            bf_msp_dp_write(9, 44, tbuf, 0);
+
+            break;
+        }
 
 
         // -------------------------------------------------------
         // GPS Number of Satallites
         // -------------------------------------------------------
-        case 7: {
+        case 8: {
             // Number of Satallites
             uint8_t sats = sharedTelem.gpsSats;
 
@@ -1304,7 +1344,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // GPS Ground Speed (mph or kph, clamped to 3 digits)
         // -------------------------------------------------------
-        case 8: {
+        case 9: {
             float gsCms = sharedTelem.gpsGroundSpeedCms;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1338,7 +1378,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Total Distance Traveled
         // -------------------------------------------------------
-        case 9: {
+        case 10: {
             float totalM = sharedTelem.gpsTotalDistM;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1383,7 +1423,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Arm state
         // -------------------------------------------------------
-        case 10:
+        case 11:
             if (armed) {
                 bf_msp_dp_write(17, 22, "   ARMED   ", 0);
             } else {
@@ -1394,7 +1434,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Step 7 — Latitude & Longitude
         // -------------------------------------------------------
-        case 11: {
+        case 12: {
             if (sharedTelem.gpsFix) {
 
                 // Format: ±XX.XXXXXX
@@ -1420,14 +1460,14 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Flight mode
         // -------------------------------------------------------
-        case 12:
+        case 13:
             bf_msp_dp_write(0, 10, "QLITE", 0);
             break;
 
         // -------------------------------------------------------
         // Crosshair
         // -------------------------------------------------------
-        case 13:
+        case 14:
                 if (_vtxType == VTX_WALKSNAIL) {
                     // Walksnail crosshair icon
                     bf_msp_dp_write(9, 25, "s", 0);
@@ -1443,7 +1483,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Commit frame
         // -------------------------------------------------------
-        case 14:
+        case 15:
             bf_msp_dp_draw();
             break;
 
