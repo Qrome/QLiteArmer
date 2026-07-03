@@ -1262,7 +1262,8 @@ void bf_msp_dp_update_osd_nb() {
             int rowH = sharedTelem.homeRadarRow;
             int colH = sharedTelem.homeRadarCol;
 
-            bf_msp_dp_write(rowH, colH, "H", 0);
+            snprintf(buf, sizeof(buf), "%c", 9);
+            bf_msp_dp_write(rowH, colH, buf, 0);
             break;
         }
 
