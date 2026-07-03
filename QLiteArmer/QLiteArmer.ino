@@ -81,36 +81,33 @@ void populateSharedTelemetry() {
     relSmooth = relSmooth * 0.90f + rel * 0.10f;
 
     // 3. Radar radius (200 ft per cell, max 2 cells)
-    float rawRadius = distFt / 200.0f;
+    float rawRadius = distFt / RADAR_CELL_FEET;
     if (rawRadius > 2.0f) rawRadius = 2.0f;
 
     static float radiusSmooth = 0.0f;
     radiusSmooth = radiusSmooth * 0.85f + rawRadius * 0.15f;
 
-    // 4. Convert smoothed relative bearing to radians
-    float theta = radians(relSmooth);
+    // 4. Convert raw relative bearing to radians
+    float theta = radians(rel); 
 
     // 5. Radar offsets around crosshair (9, 25)
     const int rowC = 9;
     const int colC = 25;
 
-    float rowOffset = -sin(theta) * radiusSmooth;
-    float colOffset =  cos(theta) * radiusSmooth;
+    // Calculate the raw mathematical target grid offsets
+    float targetRowOffset = -cos(theta) * rawRadius;
+    float targetColOffset =  sin(theta) * rawRadius;
 
-    int newRow = rowC + (int)round(rowOffset);
-    int newCol = colC + (int)round(colOffset);
+    // 6. Responsive Tuning: Use a light filter (0.40f) instead of 0.85f
+    // This removes jerky jumps but updates within 2-3 frames
+    static float rowOffsetSmooth = 0.0f;
+    static float colOffsetSmooth = 0.0f;
+    rowOffsetSmooth = rowOffsetSmooth * 0.60f + targetRowOffset * 0.40f;
+    colOffsetSmooth = colOffsetSmooth * 0.60f + targetColOffset * 0.40f;
 
-    // 6. Cell hysteresis (prevent jitter)
-    static int lastRow = newRow;
-    static int lastCol = newCol;
-
-    if (abs(newRow - lastRow) <= 1 && abs(newCol - lastCol) <= 1) {
-        newRow = lastRow;
-        newCol = lastCol;
-    }
-
-    lastRow = newRow;
-    lastCol = newCol;
+    // Convert directly to final grid coordinates
+    int newRow = rowC + (int)round(rowOffsetSmooth);
+    int newCol = colC + (int)round(colOffsetSmooth);
 
     // 7. Store unified values in SharedTelemetry
     sharedTelem.homeRelativeDeg       = rel;

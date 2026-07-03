@@ -1215,14 +1215,14 @@ void bf_msp_dp_update_osd_nb() {
             float ft = d * 3.28084f;
             if (_vtxType == VTX_WALKSNAIL) {
                 if (ft < 5280.0f) {
-                snprintf(dbuf, sizeof(dbuf), "%3.0f%c%c", ft, 15, 5);
+                snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", ft, 15, 5);
                 } else {
                     float mi = ft / 5280.0f;
                     snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c", mi, 126, 5);
                 }
             } else { // DJI
                 if (ft < 5280.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%3.0f%cF", ft, 5);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c", ft, 5);
                 } else {
                     float mi = ft / 5280.0f;
                     snprintf(dbuf, sizeof(dbuf), "%1.2fMI%c", mi, 5);
@@ -1231,27 +1231,27 @@ void bf_msp_dp_update_osd_nb() {
         #else
             if (_vtxType == VTX_WALKSNAIL) {
                 if (d < 1000.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%c%3.0f%c", 5, d, 12);
+                    snprintf(dbuf, sizeof(dbuf), "%c%4.0f%c", 5, d, 12);
                 } else {
                     float km = d / 1000.0f;
                     snprintf(dbuf, sizeof(dbuf), "%c%1.2f%c", 5, km, 125);
                 }
             } else { // DJI
                 if (d < 1000.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%c%3.0fM", 5, d);
+                    snprintf(dbuf, sizeof(dbuf), "%c%4.0fM", 5, d);
                 } else {
                     float km = d / 1000.0f;
-                    snprintf(dbuf, sizeof(dbuf), "%c%1.1fKM", 5, km);
+                    snprintf(dbuf, sizeof(dbuf), "%c%1.2fKM", 5, km);
                 }
             }
         #endif
 
-            bf_msp_dp_write(0, 35, dbuf, 0);
+            bf_msp_dp_write(0, 34, dbuf, 0);
             break;
         }
         
         // -------------------------------------------------------
-        // Ground Radar (Unified Pipeline)
+        // Ground Radar
         // -------------------------------------------------------
         case 6: {
 
@@ -1262,6 +1262,13 @@ void bf_msp_dp_update_osd_nb() {
             int rowH = sharedTelem.homeRadarRow;
             int colH = sharedTelem.homeRadarCol;
 
+            if (rowH != sharedTelem.previousHomeRadarRow || colH != sharedTelem.PreviousHomeRadarCol) {
+                // we need to clear last radar blip
+                bf_msp_dp_write(sharedTelem.previousHomeRadarRow, sharedTelem.PreviousHomeRadarCol, " ", 0);
+                sharedTelem.previousHomeRadarRow = rowH;
+                sharedTelem.PreviousHomeRadarCol = colH;
+            }
+            
             snprintf(buf, sizeof(buf), "%c", 9);
             bf_msp_dp_write(rowH, colH, buf, 0);
             break;
