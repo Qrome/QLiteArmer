@@ -406,7 +406,7 @@ float GPS::getBearingToHomeDeg() const
 {
     if (!_homeSet) return 0.0f;
 
-    // Convert 1e-7 degrees to float degrees
+    // Convert 1e-7 degrees to float degreesA
     float lat1 = _lat * 1e-7f;
     float lon1 = _lon * 1e-7f;
     float lat2 = _homeLat1e7 * 1e-7f;

@@ -36,6 +36,91 @@ inline void debugPrint(const String &msg) {
     }
 }
 
+void populateSharedTelemetry() {
+    gps.update();
+
+    // --- GPS distance smoothing ---
+    float rawDist = gps.getDistanceFromHomeM();
+
+    if (!distFiltInit) {
+        distFiltM = rawDist;
+        distFiltInit = true;
+    } else {
+        distFiltM = distFiltM * 0.8f + rawDist * 0.2f;
+    }
+
+    // Push into shared telemetry
+    sharedTelem.gpsDistHomeM = distFiltM;
+    sharedTelem.gpsFix = gps.hasFix();
+    sharedTelem.gpsSats = gps.getSatCount();
+    sharedTelem.gpsGroundSpeedCms = gps.getGroundSpeed();
+    sharedTelem.gpsCourseDeg = gps.getCourse() * 0.1f;          // FIXED: real degrees
+    sharedTelem.gpsBearingToHomeDeg = gps.getBearingToHomeDeg();
+    sharedTelem.gpsLatDeg = gps.getLatitude() * 1e-7f;
+    sharedTelem.gpsLonDeg = gps.getLongitude() * 1e-7f;
+
+    sharedTelem.baroAltCm = telemetry.readAltitudeCm();
+    sharedTelem.baroVSpeedCms = telemetry.readVSpeedCms();
+    sharedTelem.batteryMv = telemetry.readBatteryMv();
+
+    // -------------------------------------------------------
+    // Unified Home-Direction Pipeline (arrow + radar)
+    // -------------------------------------------------------
+
+    float bearingToHome = sharedTelem.gpsBearingToHomeDeg;   // Earth-frame
+    float headingDeg    = sharedTelem.gpsCourseDeg;          // Earth-frame (C.O.G.)
+    float distFt        = sharedTelem.gpsDistHomeM * 3.28084f;
+
+    // 1. Pilot-relative bearing
+    float rel = bearingToHome - headingDeg;
+    if (rel < 0) rel += 360.0f;
+    if (rel >= 360.0f) rel -= 360.0f;
+
+    // 2. Smooth the relative bearing
+    static float relSmooth = 0.0f;
+    relSmooth = relSmooth * 0.90f + rel * 0.10f;
+
+    // 3. Radar radius (200 ft per cell, max 2 cells)
+    float rawRadius = distFt / 200.0f;
+    if (rawRadius > 2.0f) rawRadius = 2.0f;
+
+    static float radiusSmooth = 0.0f;
+    radiusSmooth = radiusSmooth * 0.85f + rawRadius * 0.15f;
+
+    // 4. Convert smoothed relative bearing to radians
+    float theta = radians(relSmooth);
+
+    // 5. Radar offsets around crosshair (9, 25)
+    const int rowC = 9;
+    const int colC = 25;
+
+    float rowOffset = -sin(theta) * radiusSmooth;
+    float colOffset =  cos(theta) * radiusSmooth;
+
+    int newRow = rowC + (int)round(rowOffset);
+    int newCol = colC + (int)round(colOffset);
+
+    // 6. Cell hysteresis (prevent jitter)
+    static int lastRow = newRow;
+    static int lastCol = newCol;
+
+    if (abs(newRow - lastRow) <= 1 && abs(newCol - lastCol) <= 1) {
+        newRow = lastRow;
+        newCol = lastCol;
+    }
+
+    lastRow = newRow;
+    lastCol = newCol;
+
+    // 7. Store unified values in SharedTelemetry
+    sharedTelem.homeRelativeDeg       = rel;
+    sharedTelem.homeRelativeSmoothDeg = relSmooth;
+    sharedTelem.homeDistanceFt        = distFt;
+    sharedTelem.homeRadarRadius       = radiusSmooth;
+    sharedTelem.homeRadarRow          = newRow;
+    sharedTelem.homeRadarCol          = newCol;
+}
+
 // -------------------------------------------------------
 // Core 0 — RC input + PWM output (time-critical)
 // -------------------------------------------------------
@@ -147,31 +232,8 @@ void loop1() {
     }
     static SystemState lastState = STATE_BOOT_DETECT;
     telemetry.update();  
-    gps.update();
-
-    // --- GPS distance smoothing ---
-    float rawDist = gps.getDistanceFromHomeM();
-
-    if (!distFiltInit) {
-        distFiltM = rawDist;
-        distFiltInit = true;
-    } else {
-        distFiltM = distFiltM * 0.8f + rawDist * 0.2f;
-    }
-
-    // Push into shared telemetry
-    sharedTelem.gpsDistHomeM = distFiltM;
-    sharedTelem.gpsFix = gps.hasFix();
-    sharedTelem.gpsSats = gps.getSatCount();
-    sharedTelem.gpsGroundSpeedCms = gps.getGroundSpeed();
-    sharedTelem.gpsCourseDeg = gps.getCourse();
-    sharedTelem.gpsBearingToHomeDeg = gps.getBearingToHomeDeg();
-    sharedTelem.gpsLatDeg = gps.getLatitude() * 1e-7f;
-    sharedTelem.gpsLonDeg = gps.getLongitude() * 1e-7f;
-
-    sharedTelem.baroAltCm = telemetry.readAltitudeCm();
-    sharedTelem.baroVSpeedCms = telemetry.readVSpeedCms();
-    sharedTelem.batteryMv = telemetry.readBatteryMv();
+    
+    populateSharedTelemetry();
 
     // Start tracking only when GPS fix + 6 sats and armed
     if (!gpsReady && sharedTelem.gpsFix && sharedTelem.gpsSats >= 6) {

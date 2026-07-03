@@ -1060,6 +1060,7 @@ void bf_msp_dp_update_osd_nb() {
         case 0:
             if (!_dpReleased) {
                 bf_msp_dp_release();
+                bf_msp_dp_clear(); // Clear ONCE right here when the canvas is first claimed
                 _dpReleased = true;
                 _osdStep++;
                 return;
@@ -1096,7 +1097,6 @@ void bf_msp_dp_update_osd_nb() {
             }
 
             armed = _isArmed;
-            bf_msp_dp_clear();
             break;
 
         // -------------------------------------------------------
@@ -1249,152 +1249,48 @@ void bf_msp_dp_update_osd_nb() {
             bf_msp_dp_write(0, 35, dbuf, 0);
             break;
         }
+        
         // -------------------------------------------------------
-        // Smooth Radar-style Home Indicator (5x5 grid, 200 ft per cell)
-        // Centered on crosshair at (9, 25)
+        // Ground Radar (Unified Pipeline)
         // -------------------------------------------------------
         case 6: {
 
             if (!USE_RADAR_HOME_INDICATOR) break;
             if (!sharedTelem.gpsTotalActive) break;
 
-            // --- Sticky bearing state ---
-            static float lastMovingBearingToHome = 0.0f;
-            static bool wasMoving = false;
+            // Use unified values computed in loop1()
+            int rowH = sharedTelem.homeRadarRow;
+            int colH = sharedTelem.homeRadarCol;
 
-            // 1. Bearing from aircraft → home (Earth reference)
-            float bearingToHome = sharedTelem.gpsBearingToHomeDeg;
-
-            // 2. Aircraft heading (Earth reference)
-            float aircraftHeading = sharedTelem.gpsCourseDeg;
-
-            // 3. Detect motion using ground speed (cm/s → m/s)
-            float speedMs = sharedTelem.gpsGroundSpeedCms * 0.01f;
-            bool moving = speedMs > 0.5f;
-
-            // Heading invalid → treat as not moving
-            if (aircraftHeading <= 0.1f || aircraftHeading >= 359.9f) {
-                moving = false;
-            }
-
-            if (moving) {
-                lastMovingBearingToHome = bearingToHome;
-                wasMoving = true;
-            } else {
-                if (wasMoving) {
-                    bearingToHome = lastMovingBearingToHome;
-                }
-                wasMoving = false;
-            }
-
-            // 4. Compute relative bearing (pilot-relative)
-            float rel = bearingToHome - aircraftHeading;
-            if (rel < 0) rel += 360.0f;
-
-            // --- Smooth the bearing ---
-            radarBearingSmooth = radarBearingSmooth * 0.90f + rel * 0.10f;
-
-            float theta = radians(radarBearingSmooth);
-
-            // 5. Distance scaling (200 ft per cell)
-            float distFt = sharedTelem.gpsDistHomeM * 3.28084f;
-            float rawRadius = distFt / RADAR_CELL_FEET;  // 200 ft per cell
-
-            // Cap radius to 2 cells (5x5 grid)
-            if (rawRadius > 2.0f) rawRadius = 2.0f;
-
-            // --- Smooth the radius ---
-            radarRadiusSmooth = radarRadiusSmooth * 0.85f + rawRadius * 0.15f;
-
-            // 6. Convert bearing to grid offsets
-            float rowOffset = -sin(theta) * radarRadiusSmooth;
-            float colOffset =  cos(theta) * radarRadiusSmooth;
-
-            int rowC = 9;   // crosshair row
-            int colC = 25;  // crosshair col
-
-            int newRowH = rowC + (int)round(rowOffset);
-            int newColH = colC + (int)round(colOffset);
-
-            // --- Cell hysteresis: prevent rapid flipping ---
-            if (abs(newRowH - lastRowH) <= 1 && abs(newColH - lastColH) <= 1) {
-                // Small movement → keep old position
-                newRowH = lastRowH;
-                newColH = lastColH;
-            }
-
-            lastRowH = newRowH;
-            lastColH = newColH;
-
-            // 7. Draw the Home marker
-            bf_msp_dp_write(newRowH, newColH, "H", 0);
-
+            bf_msp_dp_write(rowH, colH, "H", 0);
             break;
         }
 
-
         // -------------------------------------------------------
-        // Home-direction arrow (SharedTelemetry version)
-        // With sticky-bearing and heading validity protection
+        // Home-direction arrow (Unified Pipeline)
         // -------------------------------------------------------
         case 7: {
-            if (sharedTelem.gpsTotalActive) {
 
-                // --- Sticky bearing state ---
-                static float lastMovingBearingToHome = 0.0f;
-                static bool wasMoving = false;
+            if (!sharedTelem.gpsTotalActive) break;
 
-                // 1. Bearing from aircraft → home (Earth reference)
-                float bearingToHome = sharedTelem.gpsBearingToHomeDeg;
+            // Use unified smoothed relative bearing
+            float relSmooth = sharedTelem.homeRelativeSmoothDeg;
 
-                // 2. Aircraft heading (Earth reference)
-                float aircraftHeading = sharedTelem.gpsCourseDeg;
+            // Betaflight DOWN = 0°, UP = 180°
+            float bfBearing = relSmooth + 180.0f;
+            if (bfBearing >= 360.0f) bfBearing -= 360.0f;
 
-                // 3. Detect motion using ground speed (cm/s → m/s)
-                float speedMs = sharedTelem.gpsGroundSpeedCms * 0.01f;
+            // Convert to glyph index (16 directions)
+            uint8_t idx = (uint8_t)((bfBearing + 11.25f) / 22.5f) & 0x0F;
 
-                // GPS heading becomes unreliable below ~0.5 m/s
-                bool moving = speedMs > 0.5f;
+            // Fetch glyph
+            char arrowGlyph = glyphFromRow(arrowRows[idx]);
+            char abuf[2] = { arrowGlyph, 0 };
 
-                // Additional protection:
-                // If heading is invalid (0 or 360), treat as not moving
-                if (aircraftHeading <= 0.1f || aircraftHeading >= 359.9f) {
-                    moving = false;
-                }
-
-                if (moving) {
-                    // Craft is moving → use live bearing
-                    lastMovingBearingToHome = bearingToHome;
-                    wasMoving = true;
-                } else {
-                    // Craft is NOT moving → freeze bearing at last moving value
-                    if (wasMoving) {
-                        bearingToHome = lastMovingBearingToHome;
-                    }
-                    wasMoving = false;
-                }
-
-                // 4. Convert to pilot-relative direction
-                float rel = bearingToHome - aircraftHeading;
-                if (rel < 0) rel += 360.0f;
-
-                // 5. Rotate for Betaflight's DOWN = 0° orientation
-                float bfBearing = rel + 180.0f;
-                if (bfBearing >= 360.0f) bfBearing -= 360.0f;
-
-                // 6. Convert to glyph index (CLOCKWISE)
-                uint8_t idx = (uint8_t)((bfBearing + 11.25f) / 22.5f) & 0x0F;
-
-                // 7. Fetch glyph
-                char arrowGlyph = glyphFromRow(arrowRows[idx]);
-                char abuf[2] = { arrowGlyph, 0 };
-
-                // 8. Draw arrow
-                bf_msp_dp_write(1, 25, abuf, 0);
-            }
+            // Draw arrow
+            bf_msp_dp_write(1, 25, abuf, 0);
             break;
         }
-
 
         // -------------------------------------------------------
         // Flight Timer (MM:SS)

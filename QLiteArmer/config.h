@@ -63,7 +63,7 @@ static const uint8_t PWM_PINS[8] = {
 // Set your preferred default here:
 #define OSD_UNITS OSD_UNITS_IMPERIAL
 #define USE_RADAR_HOME_INDICATOR true
-#define RADAR_CELL_FEET 200.0f
+#define RADAR_CELL_FEET 100.0f
 
 
 // PWM-based arming (optional)
@@ -90,20 +90,21 @@ static const uint8_t LED_COUNT = 1;
 // 16‑direction home arrow glyphs (rows 96–111), CCW, 22.5° per step
 static const uint8_t arrowRows[16] = {
     96,  //   0° DOWN
-    97,  //  22.5° DOWN‑SLIGHT-RIGHT
-    98,  //  45° RIGHT‑DOWN
-    99,  //  67.5° RIGHT‑SLIGHT-UP
-    100, //  90° RIGHT
-    101, // 112.5° RIGHT‑UP
-    102, // 135° UP‑RIGHT
-    103, // 157.5° UP‑SLIGHT-RIGHT
+    111, //  22.5° DOWN‑SLIGHT‑LEFT
+    110, //  45° DOWN‑LEFT
+    109, //  67.5° LEFT‑DOWN
+    108, //  90° LEFT
+    107, // 112.5° LEFT‑SLIGHT‑UP
+    106, // 135° LEFT‑UP
+    105, // 157.5° UP‑LEFT
     104, // 180° UP
-    105, // 202.5° UP‑LEFT
-    106, // 225° LEFT‑UP
-    107, // 247.5° LEFT‑SLIGHT-UP
-    108, // 270° LEFT
-    109, // 292.5° LEFT‑DOWN
-    110, // 315° DOWN‑LEFT
-    111  // 337.5° DOWN‑SLIGHT-LEFT
+    103, // 202.5° UP‑SLIGHT‑RIGHT
+    102, // 225° UP‑RIGHT
+    101, // 247.5° RIGHT‑UP
+    100, // 270° RIGHT
+    99,  // 292.5° RIGHT‑SLIGHT‑DOWN
+    98,  // 315° RIGHT‑DOWN
+    97   // 337.5° DOWN‑SLIGHT‑RIGHT
 };
+
 
