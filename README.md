@@ -29,7 +29,9 @@ QLiteArmer includes a complete Betaflight‑compatible OSD renderer supporting:
 - Total trip distance  
 - Latitude / longitude  
 - Home arrow (16‑direction)  
+- Ground radar of home  
 - Crosshair  
+- Flight Timer  
 
 Compatible with:
 
@@ -67,6 +69,7 @@ This ensures predictable, pilot‑controlled arming behavior.
 - Home position lock  
 - Distance from home  
 - Bearing to home  
+- Ground radar showing home  
 - Ground speed  
 - Latitude / longitude  
 - Total trip distance  
@@ -180,7 +183,7 @@ All links are affiliate links that help support the project at no additional cos
 
 1. **Boot**
    - System initializes dual‑core architecture  
-   - LED indicates boot state  
+   - Blue LED indicates boot state  
 
 2. **Telemetry Acquisition**
    - Core 1 handles GPS, barometer, battery, and OSD  
@@ -193,7 +196,9 @@ All links are affiliate links that help support the project at no additional cos
 
 4. **Arming**
    - PWM Channel 5 controls arming  
-   - No auto‑arming logic  
+   - Red LED is holding and ready to arm  
+   - Green LED is armed with high power and recording  
+   - Amber LED no VTX detected
 
 5. **Servo Expansion**
    - CRSF channels mapped to PWM outputs  
@@ -226,7 +231,7 @@ All links are affiliate links that help support the project at no additional cos
 
 ### **RP2040 vs RP2350**
 - Both fully supported  
-- LED color order differs between boards  
+- LED color order differs between boards (Red and Green are swapted)  
 - Auto‑detected via compile‑time selection  
 
 ---
