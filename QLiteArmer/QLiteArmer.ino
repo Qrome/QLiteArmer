@@ -263,6 +263,7 @@ void loop1() {
     if (currentState == STATE_ARMED && lastState != STATE_ARMED && gpsReady) {
         // Rising edge: system just became ARMED
         gps.forceSetHome();
+        telemetry.resetBaseAltitude();
         sharedTelem.gpsTotalDistM = 0.0f;
         sharedTelem.gpsTotalActive = false;
         sharedTelem.gpsPrevValid = false;

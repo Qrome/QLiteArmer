@@ -44,6 +44,9 @@ public:
     // Send vertical speed (vario) frame over CRSF
     void sendVario();
 
+    // Reset Base Altitude
+    void resetBaseAltitude() { baseSet = false; }
+
     // -------------------------------------------------------
     // Status
     // -------------------------------------------------------
