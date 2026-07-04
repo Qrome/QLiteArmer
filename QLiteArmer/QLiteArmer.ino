@@ -91,9 +91,6 @@ void populateSharedTelemetry() {
     float theta = radians(rel); 
 
     // 5. Radar offsets around crosshair (9, 25)
-    const int rowC = 9;
-    const int colC = 25;
-
     // Calculate the raw mathematical target grid offsets
     float targetRowOffset = -cos(theta) * rawRadius;
     float targetColOffset =  sin(theta) * rawRadius;
@@ -106,8 +103,8 @@ void populateSharedTelemetry() {
     colOffsetSmooth = colOffsetSmooth * 0.60f + targetColOffset * 0.40f;
 
     // Convert directly to final grid coordinates
-    int newRow = rowC + (int)round(rowOffsetSmooth);
-    int newCol = colC + (int)round(colOffsetSmooth);
+    int newRow = RADAR_ROW_CENTER + (int)round(rowOffsetSmooth);
+    int newCol = RADAR_COL_CENTER + (int)round(colOffsetSmooth);
 
     // 7. Store unified values in SharedTelemetry
     sharedTelem.homeRelativeDeg       = rel;

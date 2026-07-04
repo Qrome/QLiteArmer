@@ -62,8 +62,13 @@ static const uint8_t PWM_PINS[8] = {
 
 // Set your preferred default here:
 #define OSD_UNITS OSD_UNITS_IMPERIAL
+
+// Ground Radar Options
 #define USE_RADAR_HOME_INDICATOR true
 static const uint16_t RADAR_CELL_FEET    = 200;    // number of feet per cell
+static const float RADAR_CELL_RADIUS     = 4.0F;   // number of cells radius around center
+static const int RADAR_ROW_CENTER        = 9;      // row center 1080p is 9
+static const int RADAR_COL_CENTER        = 25;     // column center 1080p is 25
 
 // PWM-based arming (optional)
 static const uint8_t PWM_ARM_CHANNEL     = 4;     // 0 based array 0 - 7
