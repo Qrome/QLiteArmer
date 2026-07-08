@@ -16,12 +16,14 @@ static const ChannelMap CH_MAP[8] = {
     {988, 2012, 1500},   // CH1
     {988, 2012, 1500},   // CH2
     {988, 2012, 1000},   // CH3 (Throttle failsafe = 1000)
-    {500, 2500, 1500},   // CH4 
+    {988, 2012, 1500},   // CH4 
     {988, 2012, 1500},   // CH5
     {500, 2500, 1500},   // CH6 (expanded range)
     {988, 2012, 1500},   // CH7
     {988, 2012, 1500}    // CH8
 };
+
+static const char* CraftName = "QLITE";  // Use uppercase and numbers
 
 // ======================================================
 // Pin Configuration
@@ -50,18 +52,12 @@ static const uint8_t PWM_PINS[8] = {
 #define VBAT_R1 30000.0f
 #define VBAT_R2  7500.0f
 
-// ======================================================
-// Telemetry Rates
-// ======================================================
-#define TELEMETRY_BATT_HZ   5
-#define TELEMETRY_ALT_HZ    5
-
 // Units for altitude + vertical speed
 #define OSD_UNITS_METRIC     0
 #define OSD_UNITS_IMPERIAL   1
 
 // Set your preferred default here:
-#define OSD_UNITS OSD_UNITS_IMPERIAL
+#define OSD_UNITS OSD_UNITS_IMPERIAL   // use OSD_UNITS_IMPERIAL or OSD_UNITS_METRIC
 
 // Ground Radar Options
 #define USE_RADAR_HOME_INDICATOR true
@@ -80,11 +76,9 @@ static const uint32_t MSP_BAUD = 115200;
 
 // Timings (ms)
 static const uint32_t VTX_DETECTION_TIMEOUT_MS = 300000;  // 5 minutes
-static const uint32_t PRE_ARM_DELAY_MS         = 30000;  // 30 seconds only used if no PWM arming
 static const uint32_t HEARTBEAT_INTERVAL_MS    = 200;    // BTFL use 150 (~6.7 Hz)
 
 // Error thresholds
-static const uint8_t TX_FAIL_THRESHOLD        = 5;
 static const uint8_t BAD_CHECKSUM_THRESHOLD   = 3;
 
 // LED

@@ -1456,7 +1456,7 @@ void bf_msp_dp_update_osd_nb() {
         // Flight mode
         // -------------------------------------------------------
         case 14:
-            bf_msp_dp_write(0, 10, "QLITE", 0);
+            bf_msp_dp_write(0, 10, CraftName, 0);
             break;
 
         // -------------------------------------------------------
