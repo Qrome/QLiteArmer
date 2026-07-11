@@ -1464,9 +1464,9 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         case 13:
             if (armed) {
-                bf_msp_dp_write(17, 21, "   ARMED   ", 0);
+                bf_msp_dp_write(17, 21, "  ARMED    ", 0);
             } else {
-                bf_msp_dp_write(17, 19, "  DISARMED   ", 0);
+                bf_msp_dp_write(17, 20, "  DISARMED   ", 0);
             }
             break;
 
