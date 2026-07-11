@@ -66,6 +66,9 @@ static const float RADAR_CELL_RADIUS     = 4.0F;   // number of cells radius aro
 static const int RADAR_ROW_CENTER        = 9;      // row center 1080p is 9
 static const int RADAR_COL_CENTER        = 25;     // column center 1080p is 25
 
+// Compass Heading Ribbon
+#define USE_COMPASS_HEADING true
+
 // PWM-based arming (optional)
 static const uint8_t PWM_ARM_CHANNEL     = 4;     // 0 based array 0 - 7
 static const uint16_t PWM_ARM_THRESHOLD  = 1700;  // µs required to arm
@@ -105,4 +108,11 @@ static const uint8_t arrowRows[16] = {
     97   // 337.5° DOWN‑SLIGHT‑RIGHT
 };
 
-
+// 24 slots base + 12 slot overflow = 36 items total.
+// Spacing: 15 degrees per index. 3 small ticks (28) between each cardinal.
+static const uint8_t compassList[36] = {
+    24, 28, 29, 28, 26, 28, 29, 28, // N to E
+    25, 28, 29, 28, 27, 28, 29, 28, // S to W
+    24, 28, 29, 28, 26, 28, 29, 28, // N to E (Wrap loop starts)
+    25, 28, 29, 28, 27, 28, 29, 28  // S to W
+};

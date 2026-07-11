@@ -1013,6 +1013,24 @@ static void formatFlightTime(char* buf, uint32_t elapsedMs) {
     sprintf(buf, "%02u:%02u", minutes, seconds);
 }
 
+// Fills a 9-byte destination array with font character codes from compassList
+void getCompassSampleBytes(uint8_t* destBuffer, float headingDeg) {
+    float boundHeading = headingDeg;
+    while (boundHeading < 0.0f)    boundHeading += 360.0f;
+    while (boundHeading >= 360.0f) boundHeading -= 360.0f;
+
+    // 16 slots around the circle, 22.5 degrees each — matches compassList's real layout
+    int midIndex = (int)roundf(boundHeading / 22.5f) % 16;
+
+    // Left edge of the 9-wide window sits 4 slots behind (counter-clockwise of) center
+    int startIndex = (midIndex - 4 + 16) % 16;
+
+    // compassList[0..15] is duplicated at [16..31], so startIndex+8 (max 23)
+    // is always safely inside the array — no wraparound math needed here.
+    for (int i = 0; i < 9; i++) {
+        destBuffer[i] = compassList[startIndex + i];
+    }
+}
 
 // =======================================================
 // PUBLIC — bf_msp_dp_update_osd_nb()
@@ -1275,9 +1293,35 @@ void bf_msp_dp_update_osd_nb() {
         }
 
         // -------------------------------------------------------
-        // Home-direction arrow (Unified Pipeline)
+        // Compass Heading Ribbon
         // -------------------------------------------------------
         case 7: {
+            if (!USE_COMPASS_HEADING) break;
+            if (!sharedTelem.gpsTotalActive) break;
+
+            // 1. Establish a static variable to freeze the last trusted heading
+            static float retainedHeading = 0.0f;
+
+            // 2. Only update our retained heading if the craft is moving fast enough
+            if (sharedTelem.gpsGroundSpeedCms >= 100) {
+                retainedHeading = sharedTelem.gpsCourseDeg;
+            }
+
+            char compassBuf[10];
+
+            // 3. Always pass the retained heading to the ribbon generator
+            getCompassSampleBytes((uint8_t*)compassBuf, retainedHeading);
+            compassBuf[9] = '\0'; // Ensure safe string termination for the MSP display driver
+
+            // 4. Always draw the ribbon so it stays visible on screen when stationary
+            bf_msp_dp_write(16, 21, compassBuf, 0);
+            break;
+        }
+
+        // -------------------------------------------------------
+        // Home-direction arrow (Unified Pipeline)
+        // -------------------------------------------------------
+        case 8: {
 
             if (!sharedTelem.gpsTotalActive) break;
 
@@ -1303,7 +1347,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Flight Timer (MM:SS)
         // -------------------------------------------------------
-        case 8: {
+        case 9: {
             char tbuf[12];
 
             // Format the timer (frozen when disarmed)
@@ -1319,7 +1363,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // GPS Number of Satallites
         // -------------------------------------------------------
-        case 9: {
+        case 10: {
             // Number of Satallites
             uint8_t sats = sharedTelem.gpsSats;
 
@@ -1328,7 +1372,7 @@ void bf_msp_dp_update_osd_nb() {
 
             if (!gpsLocked && gpsFlashState) {
                 // Flash OFF state → draw blanks
-                bf_msp_dp_write(0, 4, "     ", 0);
+                bf_msp_dp_write(0, 3, "     ", 0);
             } else {
                 // Solid ON state
                 snprintf(buf, sizeof(buf), "%c%c%2u", 30, 31, sats);
@@ -1339,7 +1383,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // GPS Ground Speed (mph or kph, clamped to 3 digits)
         // -------------------------------------------------------
-        case 10: {
+        case 11: {
             float gsCms = sharedTelem.gpsGroundSpeedCms;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1373,7 +1417,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Total Distance Traveled
         // -------------------------------------------------------
-        case 11: {
+        case 12: {
             float totalM = sharedTelem.gpsTotalDistM;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1418,18 +1462,18 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Arm state
         // -------------------------------------------------------
-        case 12:
+        case 13:
             if (armed) {
-                bf_msp_dp_write(17, 22, "   ARMED   ", 0);
+                bf_msp_dp_write(17, 21, "   ARMED   ", 0);
             } else {
-                bf_msp_dp_write(17, 20, "  DISARMED   ", 0);
+                bf_msp_dp_write(17, 19, "  DISARMED   ", 0);
             }
             break;
 
         // -------------------------------------------------------
         // Step 7 — Latitude & Longitude
         // -------------------------------------------------------
-        case 13: {
+        case 14: {
             if (sharedTelem.gpsFix) {
 
                 // Format: ±XX.XXXXXX
@@ -1445,8 +1489,8 @@ void bf_msp_dp_update_osd_nb() {
 
             } else {
                 // No GPS lock — show placeholders
-                bf_msp_dp_write(16, 1, "NO GPS", 0);
-                bf_msp_dp_write(17, 1, "-------", 0);
+                bf_msp_dp_write(16, 1, "--.-----", 0);
+                bf_msp_dp_write(17, 1, "---.-----", 0);
             }
             break;
         }
@@ -1455,14 +1499,14 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Flight mode
         // -------------------------------------------------------
-        case 14:
+        case 15:
             bf_msp_dp_write(0, 10, CraftName, 0);
             break;
 
         // -------------------------------------------------------
         // Crosshair
         // -------------------------------------------------------
-        case 15:
+        case 16:
                 if (_vtxType == VTX_WALKSNAIL) {
                     // Walksnail crosshair icon
                     bf_msp_dp_write(9, 25, "s", 0);
@@ -1478,7 +1522,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Commit frame
         // -------------------------------------------------------
-        case 16:
+        case 17:
             bf_msp_dp_draw();
             break;
 
