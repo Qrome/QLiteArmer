@@ -80,9 +80,9 @@ void populateSharedTelemetry() {
     static float relSmooth = 0.0f;
     relSmooth = relSmooth * 0.90f + rel * 0.10f;
 
-    // 3. Radar radius (200 ft per cell, max 2 cells)
+    // 3. Radar radius (RADAR_CELL_FEET ft per cell, max RADAR_CELL_RADIUS cells) see config.h
     float rawRadius = distFt / RADAR_CELL_FEET;
-    if (rawRadius > 2.0f) rawRadius = 2.0f;
+    if (rawRadius > RADAR_CELL_RADIUS) rawRadius = RADAR_CELL_RADIUS;
 
     static float radiusSmooth = 0.0f;
     radiusSmooth = radiusSmooth * 0.85f + rawRadius * 0.15f;

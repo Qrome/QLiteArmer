@@ -1331,7 +1331,7 @@ void bf_msp_dp_update_osd_nb() {
                 bf_msp_dp_write(0, 4, "     ", 0);
             } else {
                 // Solid ON state
-                snprintf(buf, sizeof(buf), "%2u%c%c", sats, 30, 31);
+                snprintf(buf, sizeof(buf), "%c%c%2u", 30, 31, sats);
                 bf_msp_dp_write(0, 3, buf, 0);
             }
             break;
