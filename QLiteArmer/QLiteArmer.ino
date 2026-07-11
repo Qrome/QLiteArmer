@@ -191,9 +191,11 @@ void setup1() {
     // MSP subsystem
     bf_msp_init(Serial1, telemetry, crsf);
 
-    delay(150);
+    delay(200);
     // LED
     ledInit();
+
+    delay(200);
 
     // GPS on SerialPIO using pins 14 (TX) and 15 (RX)
     static const uint32_t gpsBauds[] = {9600, 38400, 57600, 115200};
