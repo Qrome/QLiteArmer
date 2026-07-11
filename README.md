@@ -46,8 +46,7 @@ Uses Betaflight character mappings and custom glyphs for home arrow rendering.
 
 This project includes a full custom character map matching Betaflight’s DisplayPort glyph layout, adapted for Walksnail Avatar HD.
 
-![Betaflight-Compatible Character Map (Walksnail Avatar HD)](images/first_column_ascii_map.png)
-
+<img src="images/first_column_ascii_map.png" alt="Betaflight-Compatible Character Map (Walksnail Avatar HD)" style="background-color: black;">
 ---
 
 ## 🎮 PWM‑Based Arming (Channel 5)
@@ -114,6 +113,32 @@ QLiteArmer includes a hardware‑accurate servo expander:
 | **RGB LED** | GP16 | Onboard WS2812 |
 | **GPS** | GP14 (TX), GP15 (RX) | 4‑wire GPS |
 
+---
+## Software & Environment Setup
+
+This project is built for the Raspberry Pi Pico / RP2040 / RP2350 architecture using the Arduino IDE. Follow the steps below to configure your development environment.
+
+### 1. Install the Board Support Package (BSP)
+You must use the Arduino Pico core maintained by Earle F. Philhower, III. 
+
+1. Open the Arduino IDE.
+2. Navigate to **File** -> **Preferences**.
+3. Locate the **Additional Boards Manager URLs** field and paste the following URL:
+   ```
+   https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+   ```
+4. Click **OK**.
+5. Go to **Tools** -> **Board** -> **Boards Manager...**
+6. Search for `Pico` or `Philhower` and install **Raspberry Pi Pico/RP2040/RP2350** by *Earle F. Philhower, III*.
+7. Once installed, go to **Tools** -> **Board** -> **Raspberry Pi Pico/RP2040** and select **Waveshare RP2040 Zero**.
+
+### 2. Install Required Libraries
+Open the Arduino Library Manager (**Tools** -> **Manage Libraries...** or press `Ctrl+Shift+I` / `Cmd+Shift+I`) to search for and install:
+
+* **Adafruit BMP280 Library** (by Adafruit)
+* **NeoPixelBus** (by Makuna)
+
+> 💡 **Note:** When installing the `Adafruit BMP280` library, the IDE will ask to install required dependencies (like `Adafruit BusIO` and `Adafruit Unified Sensor`). Make sure to select **Install All** so everything compiles successfully.
 ---
 
 ## 🛠 Hardware Overview
