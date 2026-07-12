@@ -1175,36 +1175,21 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Step 3 — Vertical speed
         // -------------------------------------------------------
-        case 3:
-            if (_vtxType == VTX_WALKSNAIL) {
-                // Walksnail — safe uppercase characters only
-#if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "VS:%+5.1f%c", vspeedMs, 153);   // ft/s
-#else
-                snprintf(buf, sizeof(buf), "VS:%+5.1f%c", vspeedMs, 159);   // m/s
-#endif
-                bf_msp_dp_write(2, 10, buf, 0);
-
-            } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
-                // DJI — same characters, DJI-safe
-#if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "VS:%+5.1fF/S", vspeedMs);   // ft/s
-#else
-                snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);   // m/s
-#endif
-                bf_msp_dp_write(2, 10, buf, 0);
-
-            } else {
-                // Unknown VTX — safest fallback
-#if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "VS:%+5.1fF/S", vspeedMs);
-#else
-                snprintf(buf, sizeof(buf), "VS:%+5.1fM/S", vspeedMs);
-#endif
-                bf_msp_dp_write(2, 10, buf, 0);
+        case 3: {
+            uint8_t icon = 117; //going up
+            if (vspeedMs < 0) {
+                icon = 118; // going down
             }
-            break;
 
+#if OSD_UNITS == OSD_UNITS_IMPERIAL
+            snprintf(buf, sizeof(buf), "%c%+5.1f%c", icon, vspeedMs, 153);   // ft/s
+#else
+            snprintf(buf, sizeof(buf), "%c%+5.1f%c", icon, vspeedMs, 159);   // m/s
+#endif
+            bf_msp_dp_write(2, 10, buf, 0);
+            break;
+        }
+        
         // -------------------------------------------------------
         // Step 4 — Link Quality
         // -------------------------------------------------------
