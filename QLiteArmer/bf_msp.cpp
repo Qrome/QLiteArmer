@@ -1,3 +1,4 @@
+#include <sys/_stdint.h>
 /*
 bf_msp.cpp — Betaflight MSP Protocol Implementation
 
@@ -1032,6 +1033,43 @@ void getCompassSampleBytes(uint8_t* destBuffer, float headingDeg) {
     }
 }
 
+uint8_t getBatteryIcon(uint16_t batteryMv)
+{
+    // 1. Convert to volts
+    float totalV = batteryMv / 1000.0f;
+
+    // 2. Estimate cell count (Betaflight method)
+    int cells = (int)roundf(totalV / 4.2f);
+    if (cells < 1) cells = 1;
+    if (cells > 8) cells = 8;
+
+    // 3. Per‑cell voltage
+    float cellV = totalV / cells;
+
+    // 4. Betaflight linear percentage mapping (3.3–4.2V)
+    float pct = (cellV - 3.3f) / (4.2f - 3.3f);
+    if (pct < 0.0f) pct = 0.0f;
+    if (pct > 1.0f) pct = 1.0f;
+
+    float pct100 = pct * 100.0f;
+
+    // 5. Map percentage → 8 icons (144 = full, 151 = empty)
+    // BF uses 8 discrete battery levels.
+    uint8_t iconIndex;
+
+    if      (pct100 >= 87.5f) iconIndex = 144;  // 100%
+    else if (pct100 >= 75.0f) iconIndex = 145;  // ~87%
+    else if (pct100 >= 62.5f) iconIndex = 146;  // ~75%
+    else if (pct100 >= 50.0f) iconIndex = 147;  // ~62%
+    else if (pct100 >= 37.5f) iconIndex = 148;  // ~50%
+    else if (pct100 >= 25.0f) iconIndex = 149;  // ~37%
+    else if (pct100 >= 12.5f) iconIndex = 150;  // ~25%
+    else                      iconIndex = 151;  // 0%
+
+    return iconIndex;
+}
+
+
 // =======================================================
 // PUBLIC — bf_msp_dp_update_osd_nb()
 // Non-blocking DisplayPort OSD writer.
@@ -1075,7 +1113,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Step 0 — First frame: RELEASE, then refresh telemetry
         // -------------------------------------------------------
-        case 0:
+        case 0: {
             if (!_dpReleased) {
                 bf_msp_dp_release();
                 bf_msp_dp_clear(); // Clear ONCE right here when the canvas is first claimed
@@ -1116,80 +1154,50 @@ void bf_msp_dp_update_osd_nb() {
 
             armed = _isArmed;
             break;
-
+        }
         // -------------------------------------------------------
         // Step 1 — Battery voltage
         // -------------------------------------------------------
-        case 1:
-            if (_vtxType == VTX_WALKSNAIL) {
-                // Walksnail
-                snprintf(buf, sizeof(buf), "%c%5.2f%c", 144, voltV, 6);
-                bf_msp_dp_write(1, 10, buf, 0);
-
-            } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
-                // DJI — no battery icon, so use uppercase V
-                snprintf(buf, sizeof(buf), "V:%5.2fV", voltV);
-                bf_msp_dp_write(1, 10, buf, 0);
-
-            } else {
-                // Unknown VTX — safest fallback is plain ASCII
-                snprintf(buf, sizeof(buf), "V:%5.2fV", voltV);
-                bf_msp_dp_write(1, 10, buf, 0);
-            }
+        case 1: {
+            uint8_t batteryIcon = getBatteryIcon(sharedTelem.batteryMv);
+            snprintf(buf, sizeof(buf), "%c%4.1f%c", batteryIcon, voltV, 6);
+            bf_msp_dp_write(1, 10, buf, 0);
             break;
-
+        }
         // -------------------------------------------------------
         // Step 2 — Altitude
         // -------------------------------------------------------
-        case 2:
-            if (_vtxType == VTX_WALKSNAIL) {
-                // Walksnail — safe uppercase characters only
-#if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "%4.0f%c%c", altM, 15, 127);   // feet
-#else
-                snprintf(buf, sizeof(buf), "%5.1f%c%c", altM, 12, 127);   // meters
-#endif
-                bf_msp_dp_write(1, 34, buf, 0);
+        case 2: {
 
-            } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
-                // DJI — same characters, DJI-safe
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "A:%4.0fF", altM);   // feet
+            snprintf(buf, sizeof(buf), "%4.0f%c%c", altM, 15, 127);   // feet
 #else
-                snprintf(buf, sizeof(buf), "A:%5.1fM", altM);   // meters
+            snprintf(buf, sizeof(buf), "%5.1f%c%c", altM, 12, 127);   // meters
 #endif
-                bf_msp_dp_write(1, 34, buf, 0);
-
-            } else {
-                // Unknown VTX — safest fallback
-#if OSD_UNITS == OSD_UNITS_IMPERIAL
-                snprintf(buf, sizeof(buf), "A:%4.0fF", altM);
-#else
-                snprintf(buf, sizeof(buf), "A:%5.1fM", altM);
-#endif
-                bf_msp_dp_write(1, 34, buf, 0);
-            }
+            bf_msp_dp_write(1, 34, buf, 0);
             break;
-
+        }
 
         // -------------------------------------------------------
         // Step 3 — Vertical speed
         // -------------------------------------------------------
         case 3: {
             uint8_t icon = 117; //going up
-            if (vspeedMs < 0) {
+#if OSD_UNITS == OSD_UNITS_IMPERIAL
+            if (vspeedMs < -0.5f) {
                 icon = 118; // going down
             }
-
-#if OSD_UNITS == OSD_UNITS_IMPERIAL
             snprintf(buf, sizeof(buf), "%c%+5.1f%c", icon, vspeedMs, 153);   // ft/s
 #else
+            if (vspeedMs < -0.16f) {
+                icon = 118; // going down
+            }
             snprintf(buf, sizeof(buf), "%c%+5.1f%c", icon, vspeedMs, 159);   // m/s
 #endif
             bf_msp_dp_write(2, 10, buf, 0);
             break;
         }
-        
+
         // -------------------------------------------------------
         // Step 4 — Link Quality
         // -------------------------------------------------------
