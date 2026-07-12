@@ -104,3 +104,21 @@ bool CrossfireELRS::update() {
 uint16_t CrossfireELRS::getChannel(uint8_t i) {
     return channels[i];
 }
+
+float CrossfireELRS::getChannelPercent(uint8_t i) {
+    if (i >= 16) return 0.0f;
+
+    uint16_t raw = channels[i];
+    // Clamp in case a value ever falls outside the spec range
+    if (raw < CRSF_CHANNEL_MIN) raw = CRSF_CHANNEL_MIN;
+    if (raw > CRSF_CHANNEL_MAX) raw = CRSF_CHANNEL_MAX;
+
+    return (float)(raw - CRSF_CHANNEL_MIN) * 100.0f /
+           (float)(CRSF_CHANNEL_MAX - CRSF_CHANNEL_MIN);
+}
+
+float CrossfireELRS::getChannelPercentBipolar(uint8_t i) {
+    // Useful for stick axes (roll/pitch/yaw) where you want -100%..+100%
+    // centered on the stick's neutral position rather than 0%..100%.
+    return (getChannelPercent(i) - 50.0f) * 2.0f;
+}

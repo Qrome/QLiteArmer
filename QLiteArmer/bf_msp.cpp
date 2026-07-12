@@ -1359,11 +1359,26 @@ void bf_msp_dp_update_osd_nb() {
             break;
         }
 
+        // -------------------------------------------------------
+        // Throttle Percent
+        // -------------------------------------------------------
+        case 10: {
+            if (!SHOW_THROTTLE_PERCENT) break;
+            char thbuf[6];
+
+            float throttlePercent = (_elrs != nullptr) ? _elrs->getChannelPercent(throttleIndex) : 0.0f;
+
+            snprintf(thbuf, sizeof(thbuf), "%c%3.0f%%", 4, throttlePercent);
+            bf_msp_dp_write(8, 44, thbuf, 0);
+
+            break;
+        }
+
 
         // -------------------------------------------------------
         // GPS Number of Satallites
         // -------------------------------------------------------
-        case 10: {
+        case 11: {
             // Number of Satallites
             uint8_t sats = sharedTelem.gpsSats;
 
@@ -1383,7 +1398,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // GPS Ground Speed (mph or kph, clamped to 3 digits)
         // -------------------------------------------------------
-        case 11: {
+        case 12: {
             float gsCms = sharedTelem.gpsGroundSpeedCms;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1417,7 +1432,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Total Distance Traveled
         // -------------------------------------------------------
-        case 12: {
+        case 13: {
             float totalM = sharedTelem.gpsTotalDistM;
 
             #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1462,7 +1477,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Arm state
         // -------------------------------------------------------
-        case 13:
+        case 14:
             if (armed) {
                 bf_msp_dp_write(17, 21, "  ARMED    ", 0);
             } else {
@@ -1473,7 +1488,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Step 7 — Latitude & Longitude
         // -------------------------------------------------------
-        case 14: {
+        case 15: {
             if (sharedTelem.gpsFix) {
 
                 // Format: ±XX.XXXXXX
@@ -1499,14 +1514,14 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Flight mode
         // -------------------------------------------------------
-        case 15:
+        case 16:
             bf_msp_dp_write(0, 10, CraftName, 0);
             break;
 
         // -------------------------------------------------------
         // Crosshair
         // -------------------------------------------------------
-        case 16:
+        case 17:
                 if (_vtxType == VTX_WALKSNAIL) {
                     // Walksnail crosshair icon
                     bf_msp_dp_write(9, 25, "s", 0);
@@ -1522,7 +1537,7 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Commit frame
         // -------------------------------------------------------
-        case 17:
+        case 18:
             bf_msp_dp_draw();
             break;
 

@@ -23,6 +23,8 @@ static const ChannelMap CH_MAP[8] = {
     {988, 2012, 1500}    // CH8
 };
 
+#define SHOW_THROTTLE_PERCENT true
+static const uint8_t throttleIndex = 2; //0 based index so 2 = CH3
 static const char* CraftName = "QLITE";  // Use uppercase and numbers
 
 // ======================================================
