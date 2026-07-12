@@ -1033,28 +1033,37 @@ void getCompassSampleBytes(uint8_t* destBuffer, float headingDeg) {
     }
 }
 
-uint8_t getBatteryIcon(uint16_t batteryMv)
+float getPerCellVoltage(uint16_t batteryMv, int *cellCountOut = nullptr)
 {
-    // 1. Convert to volts
     float totalV = batteryMv / 1000.0f;
 
-    // 2. Estimate cell count (Betaflight method)
+    // Betaflight cell count detection
     int cells = (int)roundf(totalV / 4.2f);
     if (cells < 1) cells = 1;
     if (cells > 8) cells = 8;
 
-    // 3. Per‑cell voltage
-    float cellV = totalV / cells;
+    if (cellCountOut) {
+        *cellCountOut = cells;
+    }
 
-    // 4. Betaflight linear percentage mapping (3.3–4.2V)
+    return totalV / cells;
+}
+
+uint8_t getBatteryIcon(uint16_t batteryMv)
+{
+    int cells = 0;
+
+    // 1. Get per‑cell voltage (and detected cell count)
+    float cellV = getPerCellVoltage(batteryMv, &cells);
+
+    // 2. Betaflight linear percentage mapping (3.3–4.2V)
     float pct = (cellV - 3.3f) / (4.2f - 3.3f);
     if (pct < 0.0f) pct = 0.0f;
     if (pct > 1.0f) pct = 1.0f;
 
     float pct100 = pct * 100.0f;
 
-    // 5. Map percentage → 8 icons (144 = full, 151 = empty)
-    // BF uses 8 discrete battery levels.
+    // 3. Map percentage → 8 icons (144 = full, 151 = empty)
     uint8_t iconIndex;
 
     if      (pct100 >= 87.5f) iconIndex = 144;  // 100%
@@ -1068,6 +1077,7 @@ uint8_t getBatteryIcon(uint16_t batteryMv)
 
     return iconIndex;
 }
+
 
 
 // =======================================================
@@ -1101,6 +1111,7 @@ void bf_msp_dp_update_osd_nb() {
 
     // Telemetry values — captured fresh at the start of each frame cycle
     static float voltV = 0.0f;
+    static float voltCell = 0.0f;
     static float altM = 0.0f;       // meters OR feet depending on config
     static float vspeedMs = 0.0f;   // m/s OR ft/s depending on config
     static bool armed = false;
@@ -1129,9 +1140,8 @@ void bf_msp_dp_update_osd_nb() {
             }
 
             // Battery voltage
-            voltV = (_telemetry != nullptr)
-                        ? _telemetry->readBatteryMv() / 1000.0f
-                        : 0.0f;
+            voltV = sharedTelem.batteryMv / 1000.0f;
+            voltCell = getPerCellVoltage(sharedTelem.batteryMv);
 
             // Altitude + vertical speed (metric or imperial)
             {
@@ -1156,16 +1166,19 @@ void bf_msp_dp_update_osd_nb() {
             break;
         }
         // -------------------------------------------------------
-        // Step 1 — Battery voltage
+        // Battery voltage
         // -------------------------------------------------------
         case 1: {
             uint8_t batteryIcon = getBatteryIcon(sharedTelem.batteryMv);
+            char vbuf[8];
             snprintf(buf, sizeof(buf), "%c%4.1f%c", batteryIcon, voltV, 6);
-            bf_msp_dp_write(1, 10, buf, 0);
+            bf_msp_dp_write(0, 10, buf, 0);
+            snprintf(vbuf, sizeof(vbuf), "%c%4.2f%c", batteryIcon, voltCell, 6);
+            bf_msp_dp_write(1, 10, vbuf, 0);
             break;
         }
         // -------------------------------------------------------
-        // Step 2 — Altitude
+        // Altitude
         // -------------------------------------------------------
         case 2: {
 
@@ -1179,7 +1192,7 @@ void bf_msp_dp_update_osd_nb() {
         }
 
         // -------------------------------------------------------
-        // Step 3 — Vertical speed
+        // Vertical speed
         // -------------------------------------------------------
         case 3: {
             uint8_t icon = 117; //going up
@@ -1199,7 +1212,7 @@ void bf_msp_dp_update_osd_nb() {
         }
 
         // -------------------------------------------------------
-        // Step 4 — Link Quality
+        // Link Quality
         // -------------------------------------------------------
         case 4: {
             uint8_t lq = (_elrs != nullptr) ? _elrs->getLinkQuality() : 0;
@@ -1472,9 +1485,9 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         case 14:
             if (armed) {
-                bf_msp_dp_write(17, 21, "  ARMED    ", 0);
+                bf_msp_dp_write(17, 21, "  ARMED    ", 1);
             } else {
-                bf_msp_dp_write(17, 20, "  DISARMED   ", 0);
+                bf_msp_dp_write(17, 20, "  DISARMED   ", 3);
             }
             break;
 
@@ -1508,7 +1521,7 @@ void bf_msp_dp_update_osd_nb() {
         // Flight mode
         // -------------------------------------------------------
         case 16:
-            bf_msp_dp_write(0, 10, CraftName, 0);
+            bf_msp_dp_write(15, 0, CraftName, 1);
             break;
 
         // -------------------------------------------------------
