@@ -14,6 +14,8 @@ QLiteArmer is an OSD and arming module — arming is **controlled by RC PWM Chan
 
 ---
 
+![QLiteArmer Custom PCB — Fully Assembled](images/OSD_Sample_01.jpg)
+
 ## ✨ Features
 
 ### **Full OSD Engine (MSP DisplayPort)**
