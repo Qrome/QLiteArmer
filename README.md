@@ -1,6 +1,6 @@
 # QLiteArmer — HD Armer and Full OSD with Dual‑Core RP2040 Telemetry MSP DisplayPort Processor
 
-QLiteArmer is a dual‑core RP2040‑based telemetry and OSD and HD arming system designed for FPV pilots, RC FPV vehicles, RC builders, and embedded developers.  
+QLiteArmer is a dual‑core RP2040‑based telemetry OSD and HD arming system designed for FPV pilots, RC FPV vehicles, RC builders, and embedded developers.  
 It provides:
 
 - Full Betaflight‑style OSD for DJI O3/O4 and Walksnail Avatar HD  
