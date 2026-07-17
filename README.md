@@ -85,6 +85,7 @@ This ensures predictable, pilot‑controlled arming behavior.
 - VBAT via ADC  
 - Configurable voltage divider  
 - Pack voltage displayed in OSD  
+- Per cell voltage  
 
 ### **Units**
 - Metric or Imperial (configurable)
@@ -101,6 +102,20 @@ QLiteArmer includes a hardware‑accurate servo expander:
 - Frequency‑matched output  
 - CRSF/ELRS channel passthrough  
 - Ultra‑stable RP2040 hardware PWM  
+
+Define individual channel range and failsafe in the config.h file:
+```C
+static const ChannelMap CH_MAP[8] = {
+    {988, 2012, 1500},   // CH1
+    {988, 2012, 1500},   // CH2
+    {988, 2012, 1000},   // CH3 (Throttle failsafe = 1000)
+    {988, 2012, 1500},   // CH4 
+    {988, 2012, 1500},   // CH5
+    {500, 2500, 1500},   // CH6 (expanded range)
+    {988, 2012, 1500},   // CH7
+    {988, 2012, 1500}    // CH8
+};
+```
 
 ---
 
