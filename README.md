@@ -12,6 +12,8 @@ It provides:
 
 QLiteArmer is an OSD and arming module — arming is **controlled by RC PWM Channel 5**.
 
+**[Get the QLiteArmer PCB Short Kit Here](https://www.etsy.com/listing/4540062198/qlitearmer-short-kit-pcb-for-rp2040-zero)**
+
 ---
 
 ![QLiteArmer Custom PCB — Fully Assembled](images/OSD_Sample_01.jpg)
