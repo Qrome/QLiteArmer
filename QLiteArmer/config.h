@@ -18,7 +18,7 @@ static const ChannelMap CH_MAP[8] = {
     {988, 2012, 1000},   // CH3 (Throttle failsafe = 1000)
     {988, 2012, 1500},   // CH4 
     {988, 2012, 1500},   // CH5
-    {500, 2500, 1500},   // CH6 (expanded range)
+    {988, 2012, 1500},   // CH6     {500, 2500, 1500};  //CH6 (expanded range)(expanded range)
     {988, 2012, 1500},   // CH7
     {988, 2012, 1500}    // CH8
 };

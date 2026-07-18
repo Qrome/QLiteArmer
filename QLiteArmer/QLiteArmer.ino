@@ -106,6 +106,9 @@ void populateSharedTelemetry() {
     int newRow = RADAR_ROW_CENTER + (int)round(rowOffsetSmooth);
     int newCol = RADAR_COL_CENTER + (int)round(colOffsetSmooth);
 
+    newRow = constrain(newRow, RADAR_ROW_CENTER - RADAR_CELL_RADIUS, RADAR_ROW_CENTER + RADAR_CELL_RADIUS);
+    newCol = constrain(newCol, RADAR_COL_CENTER - RADAR_CELL_RADIUS, RADAR_COL_CENTER + RADAR_CELL_RADIUS);
+
     // 7. Store unified values in SharedTelemetry
     sharedTelem.homeRelativeDeg       = rel;
     sharedTelem.homeRelativeSmoothDeg = relSmooth;

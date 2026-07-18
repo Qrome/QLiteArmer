@@ -1116,6 +1116,9 @@ void bf_msp_dp_update_osd_nb() {
     static float vspeedMs = 0.0f;   // m/s OR ft/s depending on config
     static bool armed = false;
     static float distM = 0.0f;
+    static const int RADAR_SIZE = (RADAR_CELL_RADIUS * 2) + 1;   // e.g. radius 4 -> 9x9
+    static const int RADAR_ORIGIN_ROW = RADAR_ROW_CENTER - RADAR_CELL_RADIUS;
+    static const int RADAR_ORIGIN_COL = RADAR_COL_CENTER - RADAR_CELL_RADIUS;
 
     char buf[32];
 
@@ -1278,23 +1281,40 @@ void bf_msp_dp_update_osd_nb() {
         // Ground Radar
         // -------------------------------------------------------
         case 6: {
-
             if (!USE_RADAR_HOME_INDICATOR) break;
             if (!sharedTelem.gpsTotalActive) break;
 
-            // Use unified values computed in loop1()
-            int rowH = sharedTelem.homeRadarRow;
-            int colH = sharedTelem.homeRadarCol;
+            static char  radarShadow[RADAR_SIZE][RADAR_SIZE];
+            static bool  radarShadowInit = false;
+            static uint32_t lastRadarSweep = 0;
 
-            if (rowH != sharedTelem.previousHomeRadarRow || colH != sharedTelem.PreviousHomeRadarCol) {
-                // we need to clear last radar blip
-                bf_msp_dp_write(sharedTelem.previousHomeRadarRow, sharedTelem.PreviousHomeRadarCol, " ", 0);
-                sharedTelem.previousHomeRadarRow = rowH;
-                sharedTelem.PreviousHomeRadarCol = colH;
+            int localRow = constrain(sharedTelem.homeRadarRow - RADAR_ORIGIN_ROW, 0, RADAR_SIZE - 1);
+            int localCol = constrain(sharedTelem.homeRadarCol - RADAR_ORIGIN_COL, 0, RADAR_SIZE - 1);
+
+            if (!radarShadowInit) {
+                memset(radarShadow, ' ', sizeof(radarShadow));
+                radarShadowInit = true;
             }
-            
-            snprintf(buf, sizeof(buf), "%c", 9);
-            bf_msp_dp_write(rowH, colH, buf, 0);
+
+            bool forceSweep = (millis() - lastRadarSweep) > 1000;
+            if (forceSweep) lastRadarSweep = millis();
+
+            for (int r = 0; r < RADAR_SIZE; r++) {
+                char desiredRow[RADAR_SIZE + 1];
+                bool rowDirty = false;
+
+                for (int c = 0; c < RADAR_SIZE; c++) {
+                    char desired = (r == localRow && c == localCol) ? (char)9 : ' ';
+                    desiredRow[c] = desired;
+                    if (desired != radarShadow[r][c]) rowDirty = true;
+                }
+                desiredRow[RADAR_SIZE] = '\0';
+
+                if (forceSweep || rowDirty) {
+                    bf_msp_dp_write(RADAR_ORIGIN_ROW + r, RADAR_ORIGIN_COL, desiredRow, 0);
+                    memcpy(radarShadow[r], desiredRow, RADAR_SIZE);
+                }
+            }
             break;
         }
 

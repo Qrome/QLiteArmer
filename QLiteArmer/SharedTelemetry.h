@@ -37,8 +37,6 @@ struct SharedTelemetry {
     float homeRadarRadius = 0.0f;          // scaled radar radius (0–2 cells)
     int   homeRadarRow = 0;                // final radar row
     int   homeRadarCol = 0;                // final radar col
-    int   previousHomeRadarRow = 0;        // previous radar row
-    int   PreviousHomeRadarCol = 0;        // previous radar col
 };
 
 extern SharedTelemetry sharedTelem;
