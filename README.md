@@ -176,7 +176,7 @@ All links are affiliate links that help support the project at no additional cos
 
 ### **Core Components**
 - **QLiteAmer PCB Board by Qrome**  
-  (Link Provided soon)
+  https://www.etsy.com/listing/4540062198/qlitearmer-short-kit-pcb-for-rp2040-zero
 
 - **RP2040‑Zero**  
   https://amzn.to/4v0oCKq
