@@ -221,8 +221,10 @@ All links are affiliate links that help support the project at no additional cos
   https://amzn.to/4f2cXWN
 
 - **Walksnail Avatar GT2 Kit – Air Unit**  
-  https://amzn.to/4geaycN
+  https://amzn.to/4geaycN  
 
+
+[![QLiteArmer OSD and HD Armer Detailed Build - RP2040 Zero FPV System](https://img.youtube.com/vi/8tNotUI8HCQ/0.jpg)](https://www.youtube.com/watch?v=8tNotUI8HCQ)
 
 ---
 
