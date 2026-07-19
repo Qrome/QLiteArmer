@@ -294,7 +294,7 @@ Each channel has:
 - `failsafeUs`
 
 Example (from config.h):
-```
+```C
 static const ChannelMap CH_MAP[8] = {
     {988, 2012, 1500},   // CH1
     {988, 2012, 1500},   // CH2
