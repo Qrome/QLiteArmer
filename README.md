@@ -167,7 +167,7 @@ Open the Arduino Library Manager (**Tools** -> **Manage Libraries...** or press 
 
 ## 🛠 Hardware Overview
 
-### **QLiteArmer Custom PCB — Bare Board Available Soon**
+### **QLiteArmer Custom PCB**
 ![QLiteArmer Custom PCB — Bare Board](images/QLiteArmer_board_00.png)
 
 ### **QLiteArmer Custom PCB — Fully Assembled**
