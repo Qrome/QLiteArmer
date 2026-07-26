@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define VERSION "1.0"
+#define VERSION "1.01"
 
 // ======================================================
 // Per‑Channel PWM Mapping (microseconds)
