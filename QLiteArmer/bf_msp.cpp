@@ -1575,7 +1575,7 @@ void bf_msp_dp_update_osd_nb() {
                     } else {
                         // Kilometers
                         float km = totalM / 1000.0f;
-                        snprintf(buf, sizeof(buf), "%1.2f%c%c", mi, 131, 117);
+                        snprintf(buf, sizeof(buf), "%1.2f%c%c", km, 131, 117);
                     }
                 }
             #endif
