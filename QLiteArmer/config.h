@@ -3,6 +3,21 @@
 
 #define VERSION "1.01"
 
+
+#define SHOW_THROTTLE_PERCENT true
+#define SHOW_GROUND_RADAR true
+#define SHOW_COMPASS_HEADING true
+#define SHOW_VERTICLE_SPEED true
+#define SHOW_CROSSHAIR true
+
+
+// Units for altitude + vertical speed
+#define OSD_UNITS_METRIC     0
+#define OSD_UNITS_IMPERIAL   1
+
+// Set your preferred default here:
+#define OSD_UNITS OSD_UNITS_IMPERIAL   // use OSD_UNITS_IMPERIAL or OSD_UNITS_METRIC
+
 // ======================================================
 // Per‑Channel PWM Mapping (microseconds)
 // ======================================================
@@ -19,12 +34,11 @@ static const ChannelMap CH_MAP[8] = {
     {988, 2012, 1000},   // CH3 (Throttle failsafe = 1000)
     {988, 2012, 1500},   // CH4 
     {988, 2012, 1500},   // CH5
-    {988, 2012, 1500},   // CH6     {500, 2500, 1500},  //CH6 (expanded range)(expanded range)
+    {500, 2500, 1500},   // CH6     {500, 2500, 1500},  //CH6 (expanded range)(expanded range)
     {988, 2012, 1500},   // CH7
     {988, 2012, 1500}    // CH8
 };
 
-#define SHOW_THROTTLE_PERCENT true
 static const uint8_t throttleIndex = 2; //0 based index so 2 = CH3
 static const char* CraftName = "QLITE";  // Use uppercase and numbers
 
@@ -55,22 +69,11 @@ static const uint8_t PWM_PINS[8] = {
 #define VBAT_R1 30000.0f
 #define VBAT_R2  7500.0f
 
-// Units for altitude + vertical speed
-#define OSD_UNITS_METRIC     0
-#define OSD_UNITS_IMPERIAL   1
-
-// Set your preferred default here:
-#define OSD_UNITS OSD_UNITS_IMPERIAL   // use OSD_UNITS_IMPERIAL or OSD_UNITS_METRIC
-
 // Ground Radar Options
-#define USE_RADAR_HOME_INDICATOR true
-static const uint16_t RADAR_CELL_FEET    = 200;    // number of feet per cell
+static const uint16_t RADAR_CELL_FEET    = 300;    // number of feet per cell
 static const float RADAR_CELL_RADIUS     = 4.0F;   // number of cells radius around center
 static const int RADAR_ROW_CENTER        = 9;      // row center 1080p is 9
 static const int RADAR_COL_CENTER        = 25;     // column center 1080p is 25
-
-// Compass Heading Ribbon
-#define USE_COMPASS_HEADING true
 
 // PWM-based arming (optional)
 static const uint8_t PWM_ARM_CHANNEL     = 4;     // 0 based array 0 - 7

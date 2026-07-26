@@ -1228,6 +1228,7 @@ void bf_msp_dp_update_osd_nb() {
         // Vertical speed
         // -------------------------------------------------------
         case 3: {
+            if (!SHOW_VERTICLE_SPEED) break;
             uint8_t icon = 117; //going up
             uint8_t vUnits = 153; // ft/s
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
@@ -1236,8 +1237,12 @@ void bf_msp_dp_update_osd_nb() {
                     icon = 118; // going down
                 }    
             } else { // DJI
-                icon = 251;
-                vUnits = 141;
+                if (vspeedMs < -0.16f) {
+                    icon = 27; // going down
+                } else {
+                    icon = 23; // going up
+                }
+                vUnits = 141; //ft/s
             }
             snprintf(buf, sizeof(buf), "%c%+5.1f%c", icon, vspeedMs, vUnits);   // ft/s
 #else
@@ -1246,7 +1251,11 @@ void bf_msp_dp_update_osd_nb() {
                     icon = 118; // going down
                 }    
             } else { // DJI
-                icon = 251;
+                if (vspeedMs < -0.16f) {
+                    icon = 27; // going down
+                } else {
+                    icon = 23; // going up
+                }
                 vUnits = 143; // m/s
             }
 
@@ -1291,7 +1300,7 @@ void bf_msp_dp_update_osd_nb() {
                 }
             } else { // DJI
                 if (ft < 5280.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%4.0%c%c", ft, 116, 16);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", ft, 116, 16);
                 } else {
                     float mi = ft / 5280.0f;
                     snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c", mi, 132, 16);
@@ -1323,7 +1332,7 @@ void bf_msp_dp_update_osd_nb() {
         // Ground Radar
         // -------------------------------------------------------
         case 6: {
-            if (!USE_RADAR_HOME_INDICATOR) break;
+            if (!SHOW_GROUND_RADAR) break;
             if (!sharedTelem.gpsTotalActive) break;
 
             static char  radarShadow[RADAR_SIZE][RADAR_SIZE];
@@ -1371,7 +1380,7 @@ void bf_msp_dp_update_osd_nb() {
         // Compass Heading Ribbon
         // -------------------------------------------------------
         case 7: {
-            if (!USE_COMPASS_HEADING) break;
+            if (!SHOW_COMPASS_HEADING) break;
             if (!sharedTelem.gpsTotalActive) break;
 
             // 1. Establish a static variable to freeze the last trusted heading
@@ -1502,7 +1511,7 @@ void bf_msp_dp_update_osd_nb() {
                     snprintf(buf, sizeof(buf), "%3.0f%c%c", mph, 157, 112);
                 } else {
                     // DJI-safe: plain ASCII
-                    snprintf(buf, sizeof(buf), "%3.0f%c%c", mph, 157, 112);
+                    snprintf(buf, sizeof(buf), "%3.0f%c", mph, 145);
                 }
 
             #else
@@ -1514,7 +1523,7 @@ void bf_msp_dp_update_osd_nb() {
                     snprintf(buf, sizeof(buf), "%03.0f%c%c", kph, 158, 112);
                 } else {
                     // DJI-safe: plain ASCII
-                    snprintf(buf, sizeof(buf), "%03.0f%c%c", kph, 158, 112);
+                    snprintf(buf, sizeof(buf), "%03.0f%c", kph, 144);
                 }
             #endif
 
@@ -1589,9 +1598,9 @@ void bf_msp_dp_update_osd_nb() {
                 }
             } else {
                 if (armed) {
-                    bf_msp_dp_write(17, 21, "  ARMED    ", 1);
+                    bf_msp_dp_write(17, 21, "  ARMED    ", 0);
                 } else {
-                    bf_msp_dp_write(17, 20, "  DISARMED   ", 1);
+                    bf_msp_dp_write(17, 20, "  DISARMED   ", 0);
                 }
             }
             break;
@@ -1630,11 +1639,11 @@ void bf_msp_dp_update_osd_nb() {
 
 
         // -------------------------------------------------------
-        // Flight mode
+        // Craft Name
         // -------------------------------------------------------
         case 16: {
             if (_vtxType == VTX_WALKSNAIL) {
-                bf_msp_dp_write(15, 0, CraftName, 1);
+                bf_msp_dp_write(15, 0, CraftName, 1); // Green
             } else { // DJI
                 bf_msp_dp_write(15, 0, CraftName, 0);
             }
@@ -1645,20 +1654,23 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Crosshair
         // -------------------------------------------------------
-        case 17:
-                if (_vtxType == VTX_WALKSNAIL) {
-                    // Walksnail crosshair icon
-                    bf_msp_dp_write(9, 25, "s", 0);
-                } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
-                    // DJI has no crosshair icon — use blank
-                    char crossbuf[3];
-                    sprintf(crossbuf, "%c", 21);
-                    bf_msp_dp_write(9, 25, crossbuf, 0);
-                } else {
-                    // Unknown VTX — safest fallback is no icon
-                    bf_msp_dp_write(9, 25, " ", 0);
-                }
+        case 17: {
+            if (!SHOW_CROSSHAIR && !SHOW_GROUND_RADAR) break;
+            if (_vtxType == VTX_WALKSNAIL) {
+                // Walksnail crosshair icon
+                bf_msp_dp_write(9, 25, "s", 0);
+            } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
+                // DJI has no crosshair icon — use blank
+                char crossbuf[3];
+                sprintf(crossbuf, "%c", 21);
+                bf_msp_dp_write(9, 25, crossbuf, 0);
+            } else {
+                // Unknown VTX — safest fallback is no icon
+                bf_msp_dp_write(9, 25, " ", 0);
+            }
             break;
+        }
+                
 
         // -------------------------------------------------------
         // Commit frame
