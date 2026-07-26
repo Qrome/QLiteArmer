@@ -19,7 +19,7 @@ static const ChannelMap CH_MAP[8] = {
     {988, 2012, 1000},   // CH3 (Throttle failsafe = 1000)
     {988, 2012, 1500},   // CH4 
     {988, 2012, 1500},   // CH5
-    {988, 2012, 1500},   // CH6     {500, 2500, 1500};  //CH6 (expanded range)(expanded range)
+    {988, 2012, 1500},   // CH6     {500, 2500, 1500},  //CH6 (expanded range)(expanded range)
     {988, 2012, 1500},   // CH7
     {988, 2012, 1500}    // CH8
 };
@@ -111,6 +111,25 @@ static const uint8_t arrowRows[16] = {
     97   // 337.5° DOWN‑SLIGHT‑RIGHT
 };
 
+static const uint8_t arrowRowsDJI[16] = {
+    68,  //   0° DOWN
+    69, //  22.5° DOWN‑SLIGHT‑LEFT
+    70, //  45° DOWN‑LEFT
+    71, //  67.5° LEFT‑DOWN
+    72, //  90° LEFT
+    73, // 112.5° LEFT‑SLIGHT‑UP
+    74, // 135° LEFT‑UP
+    75, // 157.5° UP‑LEFT
+    60, // 180° UP
+    61, // 202.5° UP‑SLIGHT‑RIGHT
+    62, // 225° UP‑RIGHT
+    63, // 247.5° RIGHT‑UP
+    64, // 270° RIGHT
+    65,  // 292.5° RIGHT‑SLIGHT‑DOWN
+    66,  // 315° RIGHT‑DOWN
+    67   // 337.5° DOWN‑SLIGHT‑RIGHT
+};
+
 // 24 slots base + 12 slot overflow = 36 items total.
 // Spacing: 15 degrees per index. 3 small ticks (28) between each cardinal.
 static const uint8_t compassList[36] = {
@@ -118,4 +137,11 @@ static const uint8_t compassList[36] = {
     25, 28, 29, 28, 27, 28, 29, 28, // S to W
     24, 28, 29, 28, 26, 28, 29, 28, // N to E (Wrap loop starts)
     25, 28, 29, 28, 27, 28, 29, 28  // S to W
+};
+
+static const uint8_t compassListDJI[36] = {
+    200, 205, 204, 205, 202, 205, 204, 205, // N to E
+    201, 205, 204, 205, 203, 205, 204, 205, // S to W
+    200, 205, 204, 205, 202, 205, 204, 205, // N to E (Wrap loop starts)
+    201, 205, 204, 205, 203, 205, 204, 205  // S to W
 };

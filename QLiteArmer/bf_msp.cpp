@@ -1029,7 +1029,11 @@ void getCompassSampleBytes(uint8_t* destBuffer, float headingDeg) {
     // compassList[0..15] is duplicated at [16..31], so startIndex+8 (max 23)
     // is always safely inside the array — no wraparound math needed here.
     for (int i = 0; i < 9; i++) {
-        destBuffer[i] = compassList[startIndex + i];
+        if (_vtxType == VTX_WALKSNAIL) {
+            destBuffer[i] = compassList[startIndex + i];
+        } else { // DJI
+            destBuffer[i] = compassListDJI[startIndex + i];
+        }
     }
 }
 
@@ -1066,14 +1070,24 @@ uint8_t getBatteryIcon(uint16_t batteryMv)
     // 3. Map percentage → 8 icons (144 = full, 151 = empty)
     uint8_t iconIndex;
 
-    if      (pct100 >= 87.5f) iconIndex = 144;  // 100%
-    else if (pct100 >= 75.0f) iconIndex = 145;  // ~87%
-    else if (pct100 >= 62.5f) iconIndex = 146;  // ~75%
-    else if (pct100 >= 50.0f) iconIndex = 147;  // ~62%
-    else if (pct100 >= 37.5f) iconIndex = 148;  // ~50%
-    else if (pct100 >= 25.0f) iconIndex = 149;  // ~37%
-    else if (pct100 >= 12.5f) iconIndex = 150;  // ~25%
-    else                      iconIndex = 151;  // 0%
+    if (_vtxType == VTX_WALKSNAIL) {
+        if      (pct100 >= 87.5f) iconIndex = 144;  // 100%
+        else if (pct100 >= 75.0f) iconIndex = 145;  // ~87%
+        else if (pct100 >= 62.5f) iconIndex = 146;  // ~75%
+        else if (pct100 >= 50.0f) iconIndex = 147;  // ~62%
+        else if (pct100 >= 37.5f) iconIndex = 148;  // ~50%
+        else if (pct100 >= 25.0f) iconIndex = 149;  // ~37%
+        else if (pct100 >= 12.5f) iconIndex = 150;  // ~25%
+        else                      iconIndex = 151;  // 0%
+    } else { //DJI
+        if      (pct100 >= 87.5f) iconIndex = 99;  // 100%
+        else if (pct100 >= 75.0f) iconIndex = 100;  // ~87%
+        else if (pct100 >= 62.5f) iconIndex = 102;  // ~75%
+        else if (pct100 >= 50.0f) iconIndex = 103;  // ~62%
+        else if (pct100 >= 37.5f) iconIndex = 104;  // ~50%
+        else if (pct100 >= 25.0f) iconIndex = 105;  // ~37%
+        else                      iconIndex = 106;  // ~25%
+    }
 
     return iconIndex;
 }
@@ -1173,10 +1187,14 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         case 1: {
             uint8_t batteryIcon = getBatteryIcon(sharedTelem.batteryMv);
+            uint8_t voltIcon = 6;
             char vbuf[8];
-            snprintf(buf, sizeof(buf), "%c%4.1f%c", batteryIcon, voltV, 6);
+            if (_vtxType != VTX_WALKSNAIL) {
+                voltIcon = 86;
+            }
+            snprintf(buf, sizeof(buf), "%c%4.1f%c", batteryIcon, voltV, voltIcon);
             bf_msp_dp_write(0, 10, buf, 0);
-            snprintf(vbuf, sizeof(vbuf), "%c%4.2f%c", batteryIcon, voltCell, 6);
+            snprintf(vbuf, sizeof(vbuf), "%c%4.2f%c", batteryIcon, voltCell, voltIcon);
             bf_msp_dp_write(1, 10, vbuf, 0);
             break;
         }
@@ -1184,11 +1202,23 @@ void bf_msp_dp_update_osd_nb() {
         // Altitude
         // -------------------------------------------------------
         case 2: {
-
+            uint8_t unitIcon = 15; // feet
+            uint8_t altIcon = 127;
+            if (_vtxType != VTX_WALKSNAIL) {
+                altIcon = 251;
+            }
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-            snprintf(buf, sizeof(buf), "%4.0f%c%c", altM, 15, 127);   // feet
+            if (_vtxType != VTX_WALKSNAIL) {
+                unitIcon = 116;
+            }
+            snprintf(buf, sizeof(buf), "%4.0f%c%c", altM, unitIcon, altIcon);   // feet
 #else
-            snprintf(buf, sizeof(buf), "%5.1f%c%c", altM, 12, 127);   // meters
+            if (_vtxType == VTX_WALKSNAIL) {
+                unitIcon = 12; // meters
+            } else { // DJI
+                unitIcon = 130; // alt m
+            }
+            snprintf(buf, sizeof(buf), "%5.1f%c%c", altM, unitIcon, altIcon);   // meters
 #endif
             bf_msp_dp_write(1, 34, buf, 0);
             break;
@@ -1199,16 +1229,28 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         case 3: {
             uint8_t icon = 117; //going up
+            uint8_t vUnits = 153; // ft/s
 #if OSD_UNITS == OSD_UNITS_IMPERIAL
-            if (vspeedMs < -0.5f) {
-                icon = 118; // going down
+            if (_vtxType == VTX_WALKSNAIL) { 
+                if (vspeedMs < -0.16f) {
+                    icon = 118; // going down
+                }    
+            } else { // DJI
+                icon = 251;
+                vUnits = 141;
             }
-            snprintf(buf, sizeof(buf), "%c%+5.1f%c", icon, vspeedMs, 153);   // ft/s
+            snprintf(buf, sizeof(buf), "%c%+5.1f%c", icon, vspeedMs, vUnits);   // ft/s
 #else
-            if (vspeedMs < -0.16f) {
-                icon = 118; // going down
+            if (_vtxType == VTX_WALKSNAIL) { 
+                if (vspeedMs < -0.16f) {
+                    icon = 118; // going down
+                }    
+            } else { // DJI
+                icon = 251;
+                vUnits = 143; // m/s
             }
-            snprintf(buf, sizeof(buf), "%c%+5.1f%c", icon, vspeedMs, 159);   // m/s
+
+            snprintf(buf, sizeof(buf), "%c%+5.1f%c", icon, vspeedMs, vUnits);   // m/s
 #endif
             bf_msp_dp_write(2, 10, buf, 0);
             break;
@@ -1225,7 +1267,7 @@ void bf_msp_dp_update_osd_nb() {
                 bf_msp_dp_write(0, 23, buf, 0);
 
             } else {
-                snprintf(buf, sizeof(buf), "%3u%%%c", lq, 1);
+                snprintf(buf, sizeof(buf), "%3u%%%c", lq, 2);
                 bf_msp_dp_write(0, 23, buf, 0);
             }
             break;
@@ -1249,26 +1291,26 @@ void bf_msp_dp_update_osd_nb() {
                 }
             } else { // DJI
                 if (ft < 5280.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c", ft, 5);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0%c%c", ft, 116, 16);
                 } else {
                     float mi = ft / 5280.0f;
-                    snprintf(dbuf, sizeof(dbuf), "%1.2fMI%c", mi, 5);
+                    snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c", mi, 132, 16);
                 }
             }
         #else
             if (_vtxType == VTX_WALKSNAIL) {
                 if (d < 1000.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%c%4.0f%c", 5, d, 12);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", d, 12, 5);
                 } else {
                     float km = d / 1000.0f;
-                    snprintf(dbuf, sizeof(dbuf), "%c%1.2f%c", 5, km, 125);
+                    snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c", km, 125, 5);
                 }
             } else { // DJI
                 if (d < 1000.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%c%4.0fM", 5, d);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", d, 130, 16);
                 } else {
                     float km = d / 1000.0f;
-                    snprintf(dbuf, sizeof(dbuf), "%c%1.2fKM", 5, km);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", d, 131, 16);
                 }
             }
         #endif
@@ -1287,6 +1329,8 @@ void bf_msp_dp_update_osd_nb() {
             static char  radarShadow[RADAR_SIZE][RADAR_SIZE];
             static bool  radarShadowInit = false;
             static uint32_t lastRadarSweep = 0;
+            uint8_t homeIcon = 9;
+            uint8_t altRow = 0;
 
             int localRow = constrain(sharedTelem.homeRadarRow - RADAR_ORIGIN_ROW, 0, RADAR_SIZE - 1);
             int localCol = constrain(sharedTelem.homeRadarCol - RADAR_ORIGIN_COL, 0, RADAR_SIZE - 1);
@@ -1299,19 +1343,24 @@ void bf_msp_dp_update_osd_nb() {
             bool forceSweep = (millis() - lastRadarSweep) > 1000;
             if (forceSweep) lastRadarSweep = millis();
 
+            if (_vtxType != VTX_WALKSNAIL) {
+                homeIcon = 11;
+                altRow = 1;
+            }
+
             for (int r = 0; r < RADAR_SIZE; r++) {
                 char desiredRow[RADAR_SIZE + 1];
                 bool rowDirty = false;
 
                 for (int c = 0; c < RADAR_SIZE; c++) {
-                    char desired = (r == localRow && c == localCol) ? (char)9 : ' ';
+                    char desired = (r == localRow && c == localCol) ? (char)homeIcon : ' ';
                     desiredRow[c] = desired;
                     if (desired != radarShadow[r][c]) rowDirty = true;
                 }
                 desiredRow[RADAR_SIZE] = '\0';
 
                 if (forceSweep || rowDirty) {
-                    bf_msp_dp_write(RADAR_ORIGIN_ROW + r, RADAR_ORIGIN_COL, desiredRow, 0);
+                    bf_msp_dp_write(RADAR_ORIGIN_ROW + r, RADAR_ORIGIN_COL, desiredRow, altRow);
                     memcpy(radarShadow[r], desiredRow, RADAR_SIZE);
                 }
             }
@@ -1363,10 +1412,15 @@ void bf_msp_dp_update_osd_nb() {
 
             // Fetch glyph
             char arrowGlyph = glyphFromRow(arrowRows[idx]);
+            uint8_t depth = 0;
+            if (_vtxType != VTX_WALKSNAIL) {
+                arrowGlyph = glyphFromRow(arrowRowsDJI[idx]);
+                depth = 1;
+            }
             char abuf[2] = { arrowGlyph, 0 };
 
             // Draw arrow
-            bf_msp_dp_write(1, 25, abuf, 0);
+            bf_msp_dp_write(1, 25, abuf, depth);
             break;
         }
 
@@ -1394,7 +1448,12 @@ void bf_msp_dp_update_osd_nb() {
 
             float throttlePercent = (_elrs != nullptr) ? _elrs->getChannelPercent(throttleIndex) : 0.0f;
 
-            snprintf(thbuf, sizeof(thbuf), "%c%3.0f%%", 4, throttlePercent);
+            uint8_t throttleChar = 4;
+            if (_vtxType != VTX_WALKSNAIL) {
+                throttleChar = 149;
+            }
+
+            snprintf(thbuf, sizeof(thbuf), "%c%3.0f%%", throttleChar, throttlePercent);
             bf_msp_dp_write(8, 44, thbuf, 0);
 
             break;
@@ -1407,6 +1466,13 @@ void bf_msp_dp_update_osd_nb() {
         case 11: {
             // Number of Satallites
             uint8_t sats = sharedTelem.gpsSats;
+            uint8_t satIconLeft = 30;
+            uint8_t satIconRight = 31;
+
+            if (_vtxType != VTX_WALKSNAIL) {
+                satIconLeft = 8;
+                satIconRight = 9;
+            }
 
             // Flash until GPS fix + 6 sats
             bool gpsLocked = (sharedTelem.gpsFix && sats >= 6);
@@ -1416,7 +1482,7 @@ void bf_msp_dp_update_osd_nb() {
                 bf_msp_dp_write(0, 3, "     ", 0);
             } else {
                 // Solid ON state
-                snprintf(buf, sizeof(buf), "%c%c%2u", 30, 31, sats);
+                snprintf(buf, sizeof(buf), "%c%c%2u", satIconLeft, satIconRight, sats);
                 bf_msp_dp_write(0, 3, buf, 0);
             }
             break;
@@ -1475,22 +1541,33 @@ void bf_msp_dp_update_osd_nb() {
                 } else { // DJI
                     if (totalFt < 5280.0f) {
                         // Under 1 mile → feet
-                        snprintf(buf, sizeof(buf), "%4.0fFT%c", totalFt, 113);
+                        snprintf(buf, sizeof(buf), "%4.0f%c%c", totalFt, 116, 117);
                     } else {
                         // Miles
                         float mi = totalFt / 5280.0f;
-                        snprintf(buf, sizeof(buf), "%1.2fMI%c", mi, 113);
+                        snprintf(buf, sizeof(buf), "%1.2f%c%c", mi, 132, 117);
                     }
                 }
 
             #else
-                if (totalM < 1000.0f) {
-                    // Under 1 km → meters
-                    snprintf(buf, sizeof(buf), "%3.0fM", totalM);
-                } else {
-                    // Kilometers
-                    float km = totalM / 1000.0f;
-                    snprintf(buf, sizeof(buf), "%1.2fKM", km);
+                if (_vtxType == VTX_WALKSNAIL) {
+                    if (totalM < 1000.0f) {
+                        // Under 1 km → meters
+                        snprintf(buf, sizeof(buf), "%3.0f%c%c", totalM, 12, 113);
+                    } else {
+                        // Kilometers
+                        float km = totalM / 1000.0f;
+                        snprintf(buf, sizeof(buf), "%1.2f%c%c", km, 125, 113);
+                    }
+                } else { // DJI
+                    if (totalM < 1000.0f) {
+                        // Under 1 km → meters
+                        snprintf(buf, sizeof(buf), "%4.0f%c%c", totalM, 130, 117);
+                    } else {
+                        // Kilometers
+                        float km = totalM / 1000.0f;
+                        snprintf(buf, sizeof(buf), "%1.2f%c%c", mi, 131, 117);
+                    }
                 }
             #endif
 
@@ -1503,14 +1580,22 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Arm state
         // -------------------------------------------------------
-        case 14:
-            if (armed) {
-                bf_msp_dp_write(17, 21, "  ARMED    ", 1);
+        case 14: {
+            if (_vtxType == VTX_WALKSNAIL) {
+                if (armed) {
+                    bf_msp_dp_write(17, 21, "  ARMED    ", 1);
+                } else {
+                    bf_msp_dp_write(17, 20, "  DISARMED   ", 3);
+                }
             } else {
-                bf_msp_dp_write(17, 20, "  DISARMED   ", 3);
+                if (armed) {
+                    bf_msp_dp_write(17, 21, "  ARMED    ", 1);
+                } else {
+                    bf_msp_dp_write(17, 20, "  DISARMED   ", 1);
+                }
             }
             break;
-
+        }
         // -------------------------------------------------------
         // Step 7 — Latitude & Longitude
         // -------------------------------------------------------
@@ -1520,12 +1605,19 @@ void bf_msp_dp_update_osd_nb() {
                 // Format: ±XX.XXXXXX
                 float lat = sharedTelem.gpsLatDeg;
                 float lon = sharedTelem.gpsLonDeg;
+                int iconLat = 137;
+                int iconLon = 152;
+
+                if (_vtxType != VTX_WALKSNAIL) {
+                    iconLat = 3;
+                    iconLon = 4;
+                }
 
                 // Walksnail-safe characters only
-                snprintf(buf, sizeof(buf), "%c%+2.6f", 137, lat); 
+                snprintf(buf, sizeof(buf), "%c%+2.6f", iconLat, lat); 
                 bf_msp_dp_write(16, 0, buf, 0);
 
-                snprintf(buf, sizeof(buf), "%c%+3.6f", 152, lon);
+                snprintf(buf, sizeof(buf), "%c%+3.6f", iconLon, lon);
                 bf_msp_dp_write(17, 0, buf, 0);
 
             } else {
@@ -1540,9 +1632,15 @@ void bf_msp_dp_update_osd_nb() {
         // -------------------------------------------------------
         // Flight mode
         // -------------------------------------------------------
-        case 16:
-            bf_msp_dp_write(15, 0, CraftName, 1);
+        case 16: {
+            if (_vtxType == VTX_WALKSNAIL) {
+                bf_msp_dp_write(15, 0, CraftName, 1);
+            } else { // DJI
+                bf_msp_dp_write(15, 0, CraftName, 0);
+            }
             break;
+        }
+            
 
         // -------------------------------------------------------
         // Crosshair
@@ -1553,7 +1651,9 @@ void bf_msp_dp_update_osd_nb() {
                     bf_msp_dp_write(9, 25, "s", 0);
                 } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
                     // DJI has no crosshair icon — use blank
-                    bf_msp_dp_write(9, 25, " ", 0);
+                    char crossbuf[3];
+                    sprintf(crossbuf, "%c", 21);
+                    bf_msp_dp_write(9, 25, crossbuf, 0);
                 } else {
                     // Unknown VTX — safest fallback is no icon
                     bf_msp_dp_write(9, 25, " ", 0);
