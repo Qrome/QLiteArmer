@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define VERSION "1.01"
+#define VERSION "1.02"
 
 
 #define SHOW_THROTTLE_PERCENT true
@@ -16,7 +16,7 @@
 #define OSD_UNITS_IMPERIAL   1
 
 // Set your preferred default here:
-#define OSD_UNITS OSD_UNITS_IMPERIAL   // use OSD_UNITS_IMPERIAL or OSD_UNITS_METRIC
+#define OSD_UNITS OSD_UNITS_METRIC   // use OSD_UNITS_IMPERIAL or OSD_UNITS_METRIC
 
 // ======================================================
 // Per‑Channel PWM Mapping (microseconds)
@@ -78,6 +78,8 @@ static const int RADAR_COL_CENTER        = 25;     // column center 1080p is 25
 // PWM-based arming (optional)
 static const uint8_t PWM_ARM_CHANNEL     = 4;     // 0 based array 0 - 7
 static const uint16_t PWM_ARM_THRESHOLD  = 1700;  // µs required to arm
+static const uint16_t PWM_DISARM_THRESHOLD = 1600;  // must drop below this (not 1700) to disarm
+static const uint32_t ARM_DEBOUNCE_MS      = 150;    // must hold past threshold this long
 static const uint16_t PWM_NO_SIGNAL_US   = 900;   // below this = no PWM present
 
 // UART

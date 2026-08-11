@@ -31,7 +31,9 @@ void enterState(SystemState s) {
 // ---------------------------------------------------------
 void stateMachineUpdate(uint16_t armValue, bool linkActive) {
     uint32_t now = millis();
-
+    static uint32_t armCandidateStart   = 0;
+    static uint32_t disarmCandidateStart = 0;
+    
     // Convert CRSF raw to microseconds for threshold comparison
     // CRSF 172 = 988µs, CRSF 1811 = 2012µs  (linear)
     uint16_t armUs = 0;
@@ -66,17 +68,17 @@ void stateMachineUpdate(uint16_t armValue, bool linkActive) {
             }
 
             if (pwmSignalPresent) {
-                // CRSF link is live — use arm channel to control arming
                 if (armUs >= PWM_ARM_THRESHOLD) {
-                    enterState(STATE_ARMED);
+                    if (armCandidateStart == 0) armCandidateStart = now;
+                    if (now - armCandidateStart >= ARM_DEBOUNCE_MS) {
+                        enterState(STATE_ARMED);
+                        armCandidateStart = 0;
+                    }
+                } else {
+                    armCandidateStart = 0;  // reset if it dips back down
                 }
-                // else: stay in PRE_ARM_DELAY waiting for arm switch
-            } else {
-                // No CRSF signal — fall back to timer-based auto-arm
-                //if (now - stateStart > PRE_ARM_DELAY_MS) {
-                //    enterState(STATE_ARMED);
-                //}
             }
+            
         }
         break;
 
@@ -90,11 +92,15 @@ void stateMachineUpdate(uint16_t armValue, bool linkActive) {
             }
 
             // If CRSF link is live and arm switch goes low → disarm
-            if (pwmSignalPresent && armUs < PWM_ARM_THRESHOLD) {
-                enterState(STATE_PRE_ARM_DELAY);
+            if (pwmSignalPresent && armUs < PWM_DISARM_THRESHOLD) {
+                if (disarmCandidateStart == 0) disarmCandidateStart = now;
+                if (now - disarmCandidateStart >= ARM_DEBOUNCE_MS) {
+                    enterState(STATE_PRE_ARM_DELAY);
+                    disarmCandidateStart = 0;
+                }
+            } else {
+                disarmCandidateStart = 0;  // reset if it recovers
             }
-            // If signal was present but is now lost, stay armed
-            // (failsafe handled by PWMDriver outputting failsafe values)
         }
         break;
 
