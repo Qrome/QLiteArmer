@@ -16,7 +16,7 @@
 #define OSD_UNITS_IMPERIAL   1
 
 // Set your preferred default here:
-#define OSD_UNITS OSD_UNITS_METRIC   // use OSD_UNITS_IMPERIAL or OSD_UNITS_METRIC
+#define OSD_UNITS OSD_UNITS_IMPERIAL   // use OSD_UNITS_IMPERIAL or OSD_UNITS_METRIC
 
 // ======================================================
 // Per‑Channel PWM Mapping (microseconds)
