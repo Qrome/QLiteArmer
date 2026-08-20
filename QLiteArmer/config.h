@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define VERSION "1.02"
+#define VERSION "1.03"
 
 
 #define SHOW_THROTTLE_PERCENT true

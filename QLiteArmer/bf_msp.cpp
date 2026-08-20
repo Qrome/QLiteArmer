@@ -1293,33 +1293,33 @@ void bf_msp_dp_update_osd_nb() {
             float ft = d * 3.28084f;
             if (_vtxType == VTX_WALKSNAIL) {
                 if (ft < 5280.0f) {
-                snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", ft, 15, 5);
+                snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c    ", ft, 15, 5);
                 } else {
                     float mi = ft / 5280.0f;
-                    snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c", mi, 126, 5);
+                    snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c    ", mi, 126, 5);
                 }
             } else { // DJI
                 if (ft < 5280.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", ft, 116, 16);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c    ", ft, 116, 16);
                 } else {
                     float mi = ft / 5280.0f;
-                    snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c", mi, 132, 16);
+                    snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c    ", mi, 132, 16);
                 }
             }
         #else
             if (_vtxType == VTX_WALKSNAIL) {
                 if (d < 1000.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", d, 12, 5);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c    ", d, 12, 5);
                 } else {
                     float km = d / 1000.0f;
-                    snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c", km, 125, 5);
+                    snprintf(dbuf, sizeof(dbuf), "%1.2f%c%c    ", km, 125, 5);
                 }
             } else { // DJI
                 if (d < 1000.0f) {
-                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", d, 130, 16);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c    ", d, 130, 16);
                 } else {
                     float km = d / 1000.0f;
-                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c", d, 131, 16);
+                    snprintf(dbuf, sizeof(dbuf), "%4.0f%c%c    ", d, 131, 16);
                 }
             }
         #endif
@@ -1389,6 +1389,14 @@ void bf_msp_dp_update_osd_nb() {
             // 2. Only update our retained heading if the craft is moving fast enough
             if (sharedTelem.gpsGroundSpeedCms >= 100) {
                 retainedHeading = sharedTelem.gpsCourseDeg;
+            }
+
+            if (_vtxType == VTX_WALKSNAIL) {
+                bf_msp_dp_write(15, 25, "v", 0);
+            } else if (_vtxType == VTX_DJI_V1 || _vtxType == VTX_DJI_O3) {
+                char compusbuf[3];
+                sprintf(compusbuf, "%c",68);
+                bf_msp_dp_write(15, 25, compusbuf, 1);
             }
 
             char compassBuf[10];
@@ -1520,10 +1528,10 @@ void bf_msp_dp_update_osd_nb() {
 
                 if (_vtxType == VTX_WALKSNAIL) {
                     // Walksnail-safe
-                    snprintf(buf, sizeof(buf), "%03.0f%c%c", kph, 158, 112);
+                    snprintf(buf, sizeof(buf), "%3.0f%c%c", kph, 158, 112);
                 } else {
                     // DJI-safe: plain ASCII
-                    snprintf(buf, sizeof(buf), "%03.0f%c", kph, 144);
+                    snprintf(buf, sizeof(buf), "%3.0f%c", kph, 144);
                 }
             #endif
 
