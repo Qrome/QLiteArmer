@@ -2,76 +2,72 @@
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 
-// ======================================================
-// Initialization
-// ======================================================
 void PWMDriver::begin(const uint8_t* pins, uint8_t count) {
-    for (uint8_t i = 0; i < count; i++) {
-        gpio_set_function(pins[i], GPIO_FUNC_PWM);
+    outputCount = pins ? (count > 8 ? 8 : count) : 0;
+    uint32_t sliceMask = 0;
+
+    // Paired GPIOs share a slice. Stop all owned slices before configuring
+    // either output, and keep the pins low until safe compare values exist.
+    for (uint8_t i = 0; i < outputCount; ++i) {
+        outputPins[i] = pins[i];
         uint slice = pwm_gpio_to_slice_num(pins[i]);
+        pwm_set_enabled(slice, false);
+        sliceMask |= 1u << slice;
+        gpio_init(pins[i]);
+        gpio_put(pins[i], false);
+        gpio_set_dir(pins[i], GPIO_OUT);
+    }
 
-        uint32_t wrap = 20000; // 20ms = 50Hz
-        pwm_set_wrap(slice, wrap);
+    pwm_config cfg = pwm_get_default_config();
+    // 1 MHz counter: one count per microsecond, 20000 counts per frame.
+    pwm_config_set_clkdiv(&cfg, (float)clock_get_hz(clk_sys) / 1000000.0f);
+    pwm_config_set_wrap(&cfg, 19999);
+    for (uint slice = 0; slice < 8; ++slice) {
+        if (sliceMask & (1u << slice)) pwm_init(slice, &cfg, false);
+    }
 
-        float div = (float)clock_get_hz(clk_sys) / (wrap * 50.0f);
-        if (div < 1.0f) div = 1.0f;
-        if (div > 256.0f) div = 256.0f;
-
-        pwm_set_clkdiv(slice, div);
-        pwm_set_enabled(slice, true);
-
-        pwm_set_gpio_level(pins[i], 1500);
-        smoothedUs[i] = 1500.0f;
+    for (uint8_t i = 0; i < outputCount; ++i) {
+        smoothedUs[i] = CH_MAP[i].failsafeUs;
+        pwm_set_gpio_level(outputPins[i], CH_MAP[i].failsafeUs);
+    }
+    for (uint8_t i = 0; i < outputCount; ++i) {
+        gpio_set_function(outputPins[i], GPIO_FUNC_PWM);
+    }
+    for (uint slice = 0; slice < 8; ++slice) {
+        if (sliceMask & (1u << slice)) pwm_set_enabled(slice, true);
     }
 }
 
-// ======================================================
-// CRSF → microseconds (per‑channel mapping)
-// ======================================================
 uint16_t PWMDriver::crsfToUs(uint8_t ch, uint16_t raw) {
     const uint16_t inMin = 172;
     const uint16_t inMax = 1811;
-
     if (raw < inMin) raw = inMin;
     if (raw > inMax) raw = inMax;
-
-    uint16_t outMin = CH_MAP[ch].minUs;
-    uint16_t outMax = CH_MAP[ch].maxUs;
-
-    return outMin + (uint32_t)(raw - inMin) * (outMax - outMin) / (inMax - inMin);
+    int32_t span = (int32_t)CH_MAP[ch].maxUs - CH_MAP[ch].minUs;
+    return (uint16_t)(CH_MAP[ch].minUs +
+        (int32_t)(raw - inMin) * span / (inMax - inMin));
 }
 
-// ======================================================
-// Exponential smoothing (crisp, receiver‑like)
-// ======================================================
 uint16_t PWMDriver::applySmoothing(uint8_t ch, uint16_t targetUs) {
-    const float alpha = 0.25f;  // higher = crisper, lower = smoother
-    smoothedUs[ch] = smoothedUs[ch] + alpha * (targetUs - smoothedUs[ch]);
+    const float alpha = 0.25f;
+    smoothedUs[ch] += alpha * (targetUs - smoothedUs[ch]);
     return (uint16_t)smoothedUs[ch];
 }
 
-// ======================================================
-// Write raw microseconds
-// ======================================================
 void PWMDriver::writeUs(uint8_t ch, uint16_t us) {
-    pwm_set_gpio_level(PWM_PINS[ch], us);
+    if (ch >= outputCount) return;
+    pwm_set_gpio_level(outputPins[ch], us);
 }
 
-// ======================================================
-// Main CRSF → PWM output path
-// ======================================================
 void PWMDriver::writeFromCRSF(uint8_t ch, uint16_t raw, bool activeLink) {
-
+    if (ch >= outputCount) return;
     uint16_t us;
-
     if (!activeLink) {
-        // Use failsafe value directly (no smoothing)
         us = CH_MAP[ch].failsafeUs;
+        // Prevent the pre-failsafe throttle value returning on reconnection.
+        smoothedUs[ch] = us;
     } else {
-        // Normal mapped + smoothed output
-        us = crsfToUs(ch, raw);
-        us = applySmoothing(ch, us);
+        us = applySmoothing(ch, crsfToUs(ch, raw));
     }
-
     writeUs(ch, us);
 }

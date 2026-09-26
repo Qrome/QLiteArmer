@@ -122,6 +122,8 @@ void populateSharedTelemetry() {
 // Core 0 — RC input + PWM output (time-critical)
 // -------------------------------------------------------
 void setup() {
+    // Establish configured failsafe pulses before USB or peripheral waits.
+    pwm.begin(PWM_PINS, 8);
     Serial.begin(115200);
     unsigned long start = millis();
     while (!Serial && (millis() - start < 1500)) {
@@ -133,19 +135,12 @@ void setup() {
     // CRSF receiver
     crsf.begin(PIN_CRSF_RX, PIN_CRSF_TX);
 
-    // PWM servo outputs
-    pwm.begin(PWM_PINS, 8);
-
-    delay(500);  // let CRSF stabilise first
-
     systemReady = true;
     debugPrint("Core 0 ready.");
 }
 
 void loop() {
-    while (!loopReady) {
-        delay(10);
-    }
+    // RC input and failsafe output must run during core 1 initialization.
     // CRSF receiver — time sensitive, must run every loop
     crsf.update();
 
@@ -153,6 +148,9 @@ void loop() {
     for (int i = 0; i < 8; i++) {
         pwm.writeFromCRSF(i, crsf.getChannel(i), crsf.crsfLinkActive);
     }
+
+    // MSP still waits for its existing core 1 initialization sequence.
+    if (!loopReady) return;
 
     bf_msp_parse_incoming();       // always — reads and responds to polls
     bf_msp_firstbeat_update();     // always — no-op after firstbeat completes

@@ -7,6 +7,13 @@
 
 
 void CrossfireELRS::begin(int rxPin, int txPin) {
+    index = 0;
+    payloadLen = 0;
+    crsfLinkActive = false;
+    lastPacketTime = 0;
+    lastByteTime = 0;
+    linkQuality = 0;
+    for (uint8_t i = 0; i < 16; ++i) channels[i] = 0;
     Serial2.setRX(rxPin);
     Serial2.setTX(txPin);
     Serial2.begin(420000);
@@ -39,70 +46,72 @@ void CrossfireELRS::decodeChannels(const uint8_t *p) {
     }
 }
 
+void CrossfireELRS::checkTimeout() {
+    // Only valid channel frames refresh lastPacketTime; statistics do not.
+    if ((uint32_t)(millis() - lastPacketTime) >= LINK_TIMEOUT_MS) {
+        crsfLinkActive = false;
+        linkQuality = 0;
+    }
+}
+
 bool CrossfireELRS::update() {
-    while (Serial2.available()) {
+    checkTimeout();
+    if (index && (uint32_t)(millis() - lastByteTime) >= LINK_TIMEOUT_MS) {
+        index = 0; // Discard an abandoned partial frame.
+    }
+
+    bool receivedChannels = false;
+    // Bound each pass so continuous UART traffic cannot starve PWM updates.
+    int bytesRemaining = Serial2.available();
+    if (bytesRemaining > 512) bytesRemaining = 512;
+    while (bytesRemaining-- > 0 && Serial2.available()) {
         uint8_t b = Serial2.read();
+        lastByteTime = millis();
 
         if (index == 0) {
             if (b == CRSF_SYNC_BYTE) buffer[index++] = b;
             continue;
         }
-
         if (index == 1) {
+            // Length includes type and CRC, excluding sync and length.
+            if (b < 2 || b > sizeof(buffer) - 2) {
+                index = 0;
+                if (b == CRSF_SYNC_BYTE) buffer[index++] = b;
+                continue;
+            }
             payloadLen = b;
             buffer[index++] = b;
-            if (payloadLen > 60) index = 0;
             continue;
         }
 
         buffer[index++] = b;
+        if (index != payloadLen + 2) continue;
 
-        if (index == payloadLen + 2) {
-            uint8_t crc       = crc8(&buffer[2], payloadLen - 1);
-            uint8_t crcFrame  = buffer[index - 1];
-
-            if (crc == crcFrame) {
-                uint8_t type    = buffer[2];
-                uint8_t *payload = &buffer[3];
-
-                // -----------------------------------------------
-                // RC Channels frame - decode stick/switch channels
-                // -----------------------------------------------
-                if (type == CRSF_TYPE_RC_CHANNELS) {
-                    decodeChannels(payload);
-                    lastPacketTime = millis();
-                    crsfLinkActive = true;
-                    index = 0;
-                    return true;
-                }
-
-                // -----------------------------------------------
-                // Link Statistics frame - read LQ and RSSI
-                // payload[2] = Uplink LQ (0-100%)
-                // payload[0] = Uplink RSSI Antenna 1 (dBm, negated)
-                // -----------------------------------------------
-                if (type == CRSF_TYPE_LINK_STATS) {
-                    linkQuality  = payload[2];   // LQ: 0-100%
-                    //rssi         = -(int8_t)payload[0]; // RSSI in dBm (positive stored, negate for true dBm)
-                    index = 0;
-                    return false; // don't return true as no new RC data yet
-                }
+        uint8_t crc = crc8(&buffer[2], payloadLen - 1);
+        if (crc == buffer[index - 1]) {
+            uint8_t type = buffer[2];
+            const uint8_t *payload = &buffer[3];
+            if (type == CRSF_TYPE_RC_CHANNELS &&
+                payloadLen == CRSF_RC_PAYLOAD_LEN + 2) {
+                decodeChannels(payload);
+                lastPacketTime = millis();
+                crsfLinkActive = true;
+                receivedChannels = true;
+            } else if (type == CRSF_TYPE_LINK_STATS && payloadLen == 12) {
+                // Standard link statistics: 10 payload bytes + type + CRC.
+                linkQuality = payload[2];
             }
-
-            index = 0;
         }
+        index = 0;
     }
 
-    // Link timeout check (100ms is standard for ELRS)
-    if (millis() - lastPacketTime > 100) {
-        crsfLinkActive = false;
-    }
-
-    return false;
+    // Always run, including when only statistics or malformed frames arrive.
+    checkTimeout();
+    return receivedChannels;
 }
 
 uint16_t CrossfireELRS::getChannel(uint8_t i) {
-    return channels[i];
+    return i < 16 ? channels[i] : 0;
 }
 
 float CrossfireELRS::getChannelPercent(uint8_t i) {

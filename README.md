@@ -125,6 +125,26 @@ static const ChannelMap CH_MAP[8] = {
 
 ---
 
+## ⚠️ ESC Safety and Failsafe Configuration
+
+**Always secure the plane on the bench and remove the propeller before powering the ESC for setup, calibration, firmware testing, or failsafe checks. Remove all propellers on multi-motor aircraft.**
+
+Only **Channel 3** is configured with a **1000 µs throttle failsafe** by default. The other channels default to **1500 µs**, which can command a motor to run on an ESC that uses minimum throttle to stop.
+
+**If you connect an ESC to any channel other than CH3, you must set that channel's `failsafeUs` in `QLiteArmer/config.h` to the correct motor-stopped value for your ESC before powering it.** Configure every ESC output individually, including a second ESC on CH6. QLiteArmer cannot automatically identify which outputs are connected to ESCs.
+
+Each `CH_MAP` entry is `{minUs, maxUs, failsafeUs}`. The third value controls the output during PWM startup and when loss of valid ELRS channel data triggers failsafe. For example, for an ESC on CH6 that uses 1000 µs to stop, replace the CH6 entry with:
+
+```C
+    {988, 2012, 1000},   // CH6: ESC with 1000 µs stopped-throttle failsafe
+```
+
+Use the range and stopped-throttle value required by your ESC; a bidirectional ESC may require a neutral value instead. Save the configuration, rebuild, and upload the firmware after making changes.
+
+With the propeller removed, verify that the motor remains stopped during startup, when QLiteArmer is restarted while the ESC stays powered, and when the radio link is lost. **Live throttle resumes automatically when valid ELRS channel data returns**, so a raised throttle stick can restart the motor. Channel 5's HD/VTX arming state does not gate the ESC PWM outputs; do not treat it as a motor safety lock.
+
+---
+
 ## ⚙ Pin Map
 
 | Function | Pin(s) | Notes |
